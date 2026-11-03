@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "toss"
+version = "0.1.0"
+description = "Hold a key, it lands on your other device. AirDrop-shaped sharing over your own wifi."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+  "websockets>=12",
+  "cryptography>=41",
+]
+
+[project.optional-dependencies]
+qr = ["qrcode>=7"]
+dev = ["pytest>=7", "pytest-asyncio>=0.23", "playwright>=1.40"]
+
+[project.scripts]
+toss = "toss.cli:main"
+
+[tool.setuptools]
+packages = ["toss"]
+
+[tool.setuptools.package-data]
+toss = []
