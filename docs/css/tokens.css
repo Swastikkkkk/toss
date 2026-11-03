@@ -1,0 +1,136 @@
+/* ------------------------------------------------------------------
+   tokens.css
+   Every colour, type and spacing value the page is allowed to use.
+   Nothing below this file may write a literal colour.
+
+   Type: the Apple system stack, so Apple devices render real SF Pro and
+   SF Mono natively. SF is not licensed for web embedding, so this is the
+   only honest way to get it, and it costs no download at all. Windows 11
+   falls back to Segoe UI Variable, which is the closest equivalent.
+   ------------------------------------------------------------------ */
+
+:root {
+  /* --- surfaces and ink: Apple's neutral ramp, warmed very slightly --- */
+  --bg:            #fbfbfd;
+  --bg-elevated:   #ffffff;
+  --surface:       #f3f3f6;
+  --surface-sunk:  #ececf0;
+  --line:          #e0e0e6;
+  --line-strong:   #c9c9d1;
+
+  --ink:           #1d1d1f;
+  --ink-soft:      #43434a;
+  --muted:         #6e6e76;
+
+  /* --- the product colour: the mint from the app itself --- */
+  --accent:        #06875c;
+  --accent-hover:  #046f4c;
+  --accent-ink:    #ffffff;
+  --accent-soft:   #e2f3ec;
+  --accent-line:   #a9ddc7;
+
+  /* --- advisory --- */
+  --amber:         #8a5a00;
+  --amber-soft:    #fbf1dc;
+  --amber-line:    #e8d2a0;
+
+  /* --- the terminal keeps its own dark world in both themes --- */
+  --term-bg:       #0b0f14;
+  --term-chrome:   #151b23;
+  --term-ink:      #dde4ec;
+  --term-muted:    #76818f;
+  --term-accent:   #58d9a4;
+  --term-amber:    #e8b35c;
+
+  /* --- type --- */
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+          "Segoe UI Variable Text", "Segoe UI", system-ui, Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+          "Cascadia Mono", "Liberation Mono", monospace;
+
+  --step--1: clamp(13px, 0.2vw + 12.4px, 14px);
+  --step-0:  clamp(16px, 0.25vw + 15.2px, 17.5px);
+  --step-1:  clamp(18px, 0.7vw + 16.2px, 22px);
+  --step-2:  clamp(22px, 1.6vw + 18px, 31px);
+  --step-3:  clamp(32px, 4.4vw + 20px, 60px);
+
+  /* --- rhythm --- */
+  --gutter: max(20px, env(safe-area-inset-left, 0px));
+  --gutter-r: max(20px, env(safe-area-inset-right, 0px));
+  --measure: 62ch;
+  --col: 760px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-xl: 26px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .05), 0 1px 1px rgba(0, 0, 0, .03);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, .07), 0 1px 3px rgba(0, 0, 0, .04);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, .12), 0 3px 10px rgba(0, 0, 0, .05);
+
+  --ease: cubic-bezier(.22, .61, .36, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:            #000000;
+    --bg-elevated:   #141416;
+    --surface:       #1c1c1e;
+    --surface-sunk:  #121214;
+    --line:          #2a2a2e;
+    --line-strong:   #3d3d43;
+
+    --ink:           #f5f5f7;
+    --ink-soft:      #d2d2d7;
+    --muted:         #8e8e96;
+
+    --accent:        #5ddfa8;
+    --accent-ink:    #04221a;
+    --accent-soft:   #11291f;
+    --accent-line:   #255a44;
+
+    --amber:         #ecb860;
+    --amber-soft:    #241d10;
+    --amber-line:    #4a3a1b;
+
+    --term-bg:       #0a0d11;
+    --term-chrome:   #14191f;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .5);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, .5);
+    --shadow-lg: 0 18px 50px rgba(0, 0, 0, .6);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg:            #000000;
+  --bg-elevated:   #141416;
+  --surface:       #1c1c1e;
+  --surface-sunk:  #121214;
+  --line:          #2a2a2e;
+  --line-strong:   #3d3d43;
+
+  --ink:           #f5f5f7;
+  --ink-soft:      #d2d2d7;
+  --muted:         #8e8e96;
+
+  --accent:        #5ddfa8;
+  --accent-ink:    #04221a;
+  --accent-soft:   #11291f;
+  --accent-line:   #255a44;
+
+  --amber:         #ecb860;
+  --amber-soft:    #241d10;
+  --amber-line:    #4a3a1b;
+
+  --term-bg:       #0a0d11;
+  --term-chrome:   #14191f;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .5);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, .5);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, .6);
+
+  color-scheme: dark;
+}

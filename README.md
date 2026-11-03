@@ -189,21 +189,53 @@ end to end run drives a real browser against a real hub and checks:
 
 ## The site
 
-`docs/` is a standalone landing page explaining all of this, with a live pairing
-code generator that uses the same wordlist. It is one HTML file plus two images
-and needs no build step.
-
-To put it online, push this repo to GitHub, then in **Settings > Pages** choose
-`main` as the branch and `/docs` as the folder. It appears at
-`https://<you>.github.io/toss/` within a minute. Netlify and Vercel work the
-same way: point them at this repo with `docs` as the publish directory and no
-build command.
-
-To read it locally:
+`site/` is the source of the landing page and `docs/` is the built copy that
+gets served. Both are plain files with no build tooling: `site/build.py` only
+wraps the page in a standalone `<head>` and copies the assets across.
 
 ```bash
-python -m http.server 8000 --directory docs
+python site/build.py                          # rebuild docs/
+python -m http.server 8000 --directory docs   # read it locally
 ```
+
+It is split the way you would split any front end: `css/tokens.css` holds every
+colour and type value and nothing else is allowed a literal colour,
+`css/base.css` is the reset and typography, `css/components.css` is the pieces.
+The JavaScript is ES modules, one job each: `words.js` (the wordlist, generated
+from `toss/crypto.py` so the two cannot drift), `codegen.js`, `keyhold.js`,
+`motion.js`, `clipboard.js`, and `main.js` as the only entry point.
+
+Type is the Apple system stack, so Apple devices render real SF Pro and SF Mono
+natively. SF is not licensed for web embedding, so this is the only honest way
+to use it, and it costs no download at all. Windows 11 falls back to Segoe UI
+Variable.
+
+GSAP drives the hero entrance, the scroll reveals and the motion path on the
+hold-to-send demo. It degrades cleanly: the page is complete and readable with
+the scripts blocked entirely, and all of it is skipped under
+`prefers-reduced-motion`.
+
+### Putting it online
+
+Push this repo to GitHub, then **Settings > Pages**, branch `main`, folder
+`/docs`. It appears at `https://<you>.github.io/toss/` within a minute. Netlify
+and Vercel are the same: point them at the repo with `docs` as the publish
+directory and no build command. Netlify Drop also works, just drag the `docs`
+folder onto it.
+
+### Checked on
+
+Sixteen configurations, every one with no horizontal scroll, nothing
+overflowing, no console errors, the hold demo delivering and the code generator
+rolling:
+
+| | |
+| --- | --- |
+| phones | iPhone SE at 320px, iPhone 13, iPhone 15 Pro Max, Pixel 7 |
+| tablets | iPad Mini portrait, 1024px landscape |
+| desktop | 1440px, 1920px |
+| themes | light and dark on every one of them |
+| motion | `prefers-reduced-motion` leaves the page complete and still |
 
 ## Layout
 

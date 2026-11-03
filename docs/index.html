@@ -4,353 +4,128 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="toss: highlight something, hold a key, it lands on your other device. Over your own wifi, encrypted, with no server in between.">
+<meta name="color-scheme" content="light dark">
 <meta property="og:title" content="toss">
 <meta property="og:description" content="Highlight something. Hold a key. It is on your phone before you let go.">
 <meta property="og:type" content="website">
+<meta property="og:image" content="icon-512.png">
+<meta name="twitter:card" content="summary">
 <link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="theme-color" content="#0d1116">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <title>toss</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;600&display=swap">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/components.css">
 <style>
-  /* Layout: one narrow column, terminal blocks full-bleed inside it, an arc
-     across the top that carries the thing being thrown. */
-  :root {
-    --bg: #fbfbf9;
-    --surface: #ffffff;
-    --line: #e2e4df;
-    --ink: #14181c;
-    --muted: #5f6872;
-    --accent: #0c8f63;
-    --accent-soft: #e4f4ec;
-    --amber: #8a5a00;
-    --amber-soft: #fbf0d9;
-    --term-bg: #10141a;
-    --term-ink: #dfe5ec;
-    --term-muted: #78828f;
-    --term-accent: #58d9a4;
-
-    --display: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-    --body: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #0d1116;
-      --surface: #141a21;
-      --line: #242d36;
-      --ink: #e9eef3;
-      --muted: #96a1ad;
-      --accent: #58d9a4;
-      --accent-soft: #10291f;
-      --amber: #e8b35c;
-      --amber-soft: #2a2213;
-      --term-bg: #090d12;
-      --term-ink: #dfe5ec;
-      --term-muted: #6d7884;
-      color-scheme: dark;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #0d1116;
-    --surface: #141a21;
-    --line: #242d36;
-    --ink: #e9eef3;
-    --muted: #96a1ad;
-    --accent: #58d9a4;
-    --accent-soft: #10291f;
-    --amber: #e8b35c;
-    --amber-soft: #2a2213;
-    --term-bg: #090d12;
-    --term-ink: #dfe5ec;
-    --term-muted: #6d7884;
-    color-scheme: dark;
-  }
-
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--ink);
-    font-family: var(--body);
-    font-size: 17px;
-    line-height: 1.6;
-    -webkit-font-smoothing: antialiased;
-  }
-  .wrap {
-    max-width: 720px;
-    margin: 0 auto;
-    padding-left: max(16px, env(safe-area-inset-left, 0px));
-    padding-right: max(16px, env(safe-area-inset-right, 0px));
-    padding-block: 0;
-  }
-
-  h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; }
-  h1 { font-size: clamp(38px, 9vw, 58px); letter-spacing: -0.045em; line-height: 1.02; }
-  h1 .dot { color: var(--accent); }
-  h2 { font-size: clamp(21px, 4.4vw, 26px); letter-spacing: -0.03em; line-height: 1.2; }
-  h3 { font-size: 16px; letter-spacing: -0.015em; }
-  p { margin: 0; }
-  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
-
-  /* ---- hero ---- */
-  header { padding-block: 56px 10px; }
-  .lede {
-    font-size: clamp(18px, 3.6vw, 21px);
-    color: var(--muted);
-    max-width: 30ch;
-    margin-top: 18px;
-    line-height: 1.45;
-  }
-  .lede strong { color: var(--ink); font-weight: 600; }
-
-  .arc { margin-block: 30px 6px; }
-  .arc svg { display: block; width: 100%; height: auto; max-width: 100%; }
-  .packet { offset-path: path("M 48 150 Q 300 20 552 118"); offset-rotate: 0deg; }
-  @media (prefers-reduced-motion: no-preference) {
-    .packet { animation: fly 3.4s cubic-bezier(.45,.05,.3,1) infinite; }
-  }
-  @keyframes fly {
-    0%, 8% { offset-distance: 0%; opacity: 0; }
-    14% { opacity: 1; }
-    62% { offset-distance: 100%; opacity: 1; }
-    72%, 100% { offset-distance: 100%; opacity: 0; }
-  }
-
-  .caption {
-    font-family: var(--mono);
-    font-size: 12.5px;
-    color: var(--muted);
-    letter-spacing: 0.01em;
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    justify-content: space-between;
-  }
-
-  /* ---- sections ---- */
-  section { padding-block: 44px; border-top: 1px solid var(--line); }
-  section:first-of-type { border-top: 0; }
-  .eyebrow {
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin-bottom: 10px;
-  }
-  .stack { display: flex; flex-direction: column; gap: 18px; }
-  .prose { max-width: 64ch; color: var(--muted); }
-  .prose strong { color: var(--ink); font-weight: 600; }
-
-  /* ---- terminal ---- */
-  .term {
-    background: var(--term-bg);
-    color: var(--term-ink);
-    border-radius: 12px;
-    border: 1px solid var(--line);
-    overflow: hidden;
-  }
-  .term-bar {
-    display: flex; align-items: center; gap: 7px;
-    padding: 10px 14px;
-    border-bottom: 1px solid rgba(255,255,255,.07);
-    font-family: var(--mono); font-size: 11.5px; color: var(--term-muted);
-    letter-spacing: 0.04em;
-  }
-  .term-bar i { width: 9px; height: 9px; border-radius: 50%; background: #343d48; flex: none; }
-  .term pre {
-    margin: 0;
-    padding: 16px 18px;
-    overflow-x: auto;
-    font-family: var(--mono);
-    font-size: 13.5px;
-    line-height: 1.75;
-    tab-size: 2;
-  }
-  .term .c { color: var(--term-accent); }
-  .term .d { color: var(--term-muted); }
-  .term .w { color: #e8b35c; }
-
-  /* ---- steps ---- */
-  ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 26px; }
-  ol.steps > li { counter-increment: s; display: grid; grid-template-columns: 30px 1fr; gap: 14px; min-width: 0; }
-  ol.steps > li::before {
-    content: counter(s);
-    font-family: var(--mono); font-size: 13px; font-weight: 600;
-    color: var(--accent);
-    background: var(--accent-soft);
-    width: 30px; height: 30px; border-radius: 50%;
-    display: grid; place-items: center;
-    margin-top: 1px;
-  }
-  ol.steps .body { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
-  ol.steps h3 { margin-bottom: -2px; }
-  ol.steps p { color: var(--muted); font-size: 15.5px; }
-
-  /* ---- code generator ---- */
-  .coder {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 18px;
-    display: flex; flex-direction: column; gap: 12px;
-  }
-  .coder-out {
-    font-family: var(--mono);
-    font-size: clamp(16px, 3.8vw, 21px);
-    font-weight: 500;
-    letter-spacing: -0.01em;
-    color: var(--accent);
-    min-height: 1.5em;
-    word-break: break-word;
-  }
-  .coder-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  button {
-    font-family: var(--body); font-size: 14px; font-weight: 600;
-    padding: 9px 15px; border-radius: 8px;
-    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
-    cursor: pointer;
-  }
-  button:hover { border-color: var(--accent); color: var(--accent); }
-  .coder small { color: var(--muted); font-size: 13px; }
-
-  /* ---- shot ---- */
-  .shot {
-    display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
-    gap: 26px; align-items: start;
-  }
-  .shot img {
-    width: 100%; max-width: 100%; border-radius: 14px;
-    border: 1px solid var(--line); display: block;
-  }
-  @media (max-width: 560px) { .shot { grid-template-columns: 1fr; gap: 18px; } }
-
-  /* ---- reference table ---- */
-  .tablewrap { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; min-width: 440px; }
-  th, td { text-align: left; padding: 11px 14px 11px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
-  td.cmd { font-family: var(--mono); font-size: 13.5px; color: var(--ink); white-space: nowrap; padding-right: 22px; }
-  td.what { color: var(--muted); font-size: 15px; }
-
-  /* ---- notes ---- */
-  .note {
-    border-left: 2px solid var(--amber);
-    background: var(--amber-soft);
-    border-radius: 0 8px 8px 0;
-    padding: 14px 16px;
-    font-size: 15.5px;
-    color: var(--ink);
-  }
-  .note h3 { color: var(--amber); font-size: 14px; margin-bottom: 4px; }
-  .note p { color: var(--muted); }
-
-  .facts { display: flex; flex-direction: column; gap: 14px; }
-  .fact { display: grid; grid-template-columns: 112px 1fr; gap: 14px; min-width: 0; }
-  .fact dt { font-family: var(--mono); font-size: 12.5px; color: var(--muted); padding-top: 3px; letter-spacing: 0.01em; }
-  .fact dd { margin: 0; font-size: 15.5px; color: var(--ink); min-width: 0; }
-  @media (max-width: 480px) { .fact { grid-template-columns: 1fr; gap: 3px; } }
-
-  footer {
-    border-top: 1px solid var(--line);
-    padding-block: 32px 56px;
-    color: var(--muted);
-    font-size: 14px;
-    display: flex; flex-direction: column; gap: 8px;
-  }
-  kbd {
-    font-family: var(--mono); font-size: 0.86em;
-    border: 1px solid var(--line); border-bottom-width: 2px;
-    border-radius: 5px; padding: 1px 5px;
-    background: var(--surface); color: var(--ink);
-    white-space: nowrap;
-  }
-  code:not(.term code) {
-    font-family: var(--mono); font-size: 0.87em;
-    background: var(--surface); border: 1px solid var(--line);
-    border-radius: 5px; padding: 1px 5px;
-  }
-</style>
-<style>
-  /* the hosted copy supplies what the artifact host would otherwise provide */
-  html { color-scheme: light; }
+  /* what the artifact host would otherwise provide */
   :root {
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
-  img { max-width: 100%; }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
-<div class="wrap">
+<header class="topbar" id="topbar">
+  <div class="shell">
+    <a class="brand" href="#top">toss<b>.</b></a>
+    <nav class="navlinks">
+      <a href="#setup">Setup</a>
+      <a href="#use" class="hide-xs">Daily use</a>
+      <a href="#code" class="hide-sm">The code</a>
+      <a href="#limits" class="hide-sm">Limits</a>
+      <a href="#reference">Commands</a>
+    </nav>
+  </div>
+</header>
 
-  <header>
-    <h1>toss<span class="dot">.</span></h1>
-    <p class="lede">Highlight something. Hold a key. It is <strong>on your phone</strong> before you let go.</p>
+<main id="top">
 
-    <div class="arc" aria-hidden="true">
-      <svg viewBox="0 0 600 200" role="presentation">
-        <!-- laptop -->
-        <rect x="14" y="128" width="68" height="44" rx="5" fill="none" stroke="var(--line)" stroke-width="2"/>
-        <rect x="24" y="137" width="48" height="26" rx="2" fill="var(--accent-soft)"/>
-        <rect x="4" y="176" width="88" height="5" rx="2.5" fill="var(--line)"/>
-        <!-- phone -->
-        <rect x="528" y="76" width="48" height="84" rx="9" fill="none" stroke="var(--line)" stroke-width="2"/>
-        <rect x="535" y="87" width="34" height="62" rx="3" fill="var(--accent-soft)"/>
-        <!-- the throw -->
-        <path d="M 48 150 Q 300 20 552 118" fill="none" stroke="var(--accent)" stroke-width="2"
-              stroke-linecap="round" stroke-dasharray="3 7" opacity=".45"/>
-        <g class="packet">
-          <circle r="9" fill="var(--bg)"/>
-          <circle r="6.5" fill="var(--accent)"/>
-        </g>
-      </svg>
-    </div>
-    <p class="caption"><span>your laptop</span><span>your wifi, nothing in between</span><span>your phone</span></p>
-  </header>
+  <section class="hero shell">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <h1 id="hero-title">toss<span style="color:var(--accent)">.</span></h1>
+        <p class="lede" id="hero-lede">
+          Highlight something. Hold a key. It is <strong>on your phone</strong> before you let go.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#setup" style="border-bottom:1px solid var(--accent)">Set it up</a>
+          <a class="btn" href="#limits" style="border-bottom:1px solid var(--line-strong)">What breaks</a>
+        </div>
+      </div>
 
-  <section>
-    <p class="eyebrow">What it is</p>
-    <div class="stack">
-      <h2>AirDrop, for the machines AirDrop ignores.</h2>
-      <p class="prose">You copy a link on your laptop and you want it on your phone. Right now that means opening
-        WhatsApp and messaging yourself, or mailing yourself, or typing a URL by hand. Every one of those is
-        four or five steps and a round trip through someone else's server.</p>
-      <p class="prose">The transfer was never the hard part. Browser-to-browser sharing tools have existed for
-        years and almost nobody uses them daily, because you still have to go and open a tab first.
-        <strong>The friction is the opening, not the sending.</strong></p>
-      <p class="prose">So on the laptop there is no window at all. There is a key you hold. On the other device
-        there is a page that is already open, which needs nothing installed, which is the only way this works
-        on a phone someone is already holding.</p>
+      <div class="demo" id="demo">
+        <button class="keycap" id="keycap" type="button" data-held="false"
+                aria-label="Hold this key for four tenths of a second to send">
+          <span class="keycap-face"><span class="keycap-label">right ctrl</span></span>
+          <svg class="keycap-ring" viewBox="0 0 122 96" aria-hidden="true">
+            <rect class="track" x="1" y="1" width="120" height="94" rx="20"></rect>
+            <rect id="ring-fill" class="fill" x="1" y="1" width="120" height="94" rx="20"
+                  fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"></rect>
+          </svg>
+        </button>
+
+        <div class="demo-wire">
+          <svg viewBox="0 0 160 78" preserveAspectRatio="none" aria-hidden="true">
+            <path id="wire-path" class="path" d="M 4 52 Q 80 6 156 34"></path>
+          </svg>
+          <div class="demo-chip" id="chip"></div>
+        </div>
+
+        <div class="demo-phone" id="demo-phone" aria-hidden="true">
+          <div class="demo-item">github.com/Swastikkkkk</div>
+        </div>
+
+        <p class="demo-hint" id="demo-hint">try it: <b>press and hold</b> the key</p>
+      </div>
     </div>
   </section>
 
-  <section>
-    <p class="eyebrow">Setup, once</p>
+  <section class="section shell" data-reveal>
     <div class="stack">
-      <h2>About a minute, and then never again.</h2>
+      <p class="eyebrow">What it is</p>
+      <h2>AirDrop, for the machines AirDrop ignores.</h2>
+      <p class="prose">You copy a link on your laptop and you want it on your phone. Right now that means
+        opening WhatsApp and messaging yourself, or mailing yourself, or typing a URL by hand. Every one of
+        those is four or five steps and a round trip through someone else's server.</p>
+      <p class="prose">The transfer was never the hard part. Browser-to-browser sharing tools have existed for
+        years and almost nobody uses them daily, because you still have to go and open a tab first.
+        <strong>The friction is the opening, not the sending.</strong></p>
+      <p class="prose">So on the laptop there is no window at all. There is a key you hold. On the other
+        device there is a page that is already open, which needs nothing installed, which is the only way
+        this works on a phone someone is already holding.</p>
+    </div>
+  </section>
+
+  <section class="section shell" id="setup">
+    <div class="stack-lg">
+      <div class="stack-sm" data-reveal>
+        <p class="eyebrow">Setup, once</p>
+        <h2>About a minute, and then never again.</h2>
+      </div>
+
       <ol class="steps">
         <li>
-          <div class="body">
+          <div class="step-body">
             <h3>Install it on the laptop</h3>
-            <p>Python 3.10 or newer. Two real dependencies. On Windows you can double click <code>start.bat</code> instead.</p>
+            <p>Python 3.10 or newer, and two real dependencies. On Windows you can double click
+              <span class="tag">start.bat</span> instead of touching a terminal.</p>
             <div class="term">
-              <div class="term-bar"><i></i><i></i><i></i><span>terminal</span></div>
+              <div class="term-bar"><i></i><i></i><i></i><span>terminal</span>
+                <button class="term-copy" data-copy type="button">copy</button></div>
 <pre><span class="d">$</span> pip install -e <span class="c">".[qr]"</span></pre>
             </div>
           </div>
         </li>
         <li>
-          <div class="body">
+          <div class="step-body">
             <h3>Start it</h3>
             <p>It prints a four word code, a QR, and the address to open. Then it waits.</p>
             <div class="term">
-              <div class="term-bar"><i></i><i></i><i></i><span>terminal</span></div>
+              <div class="term-bar"><i></i><i></i><i></i><span>terminal</span>
+                <button class="term-copy" data-copy type="button">copy</button></div>
 <pre><span class="d">$</span> toss serve
 
   toss is up on <span class="c">http://192.168.1.5:7777</span>
@@ -365,19 +140,20 @@
           </div>
         </li>
         <li>
-          <div class="body">
+          <div class="step-body">
             <h3>Open that address on your phone</h3>
-            <p>Any browser. Scan the QR, or type the four words. Then use your browser's
-              <strong>add to home screen</strong> and it behaves like an app, with an icon and all.</p>
+            <p>Any browser, no install. Scan the QR or type the four words. Then use your browser's
+              <strong>add to home screen</strong> and it gets an icon and opens full screen like an app.</p>
           </div>
         </li>
         <li>
-          <div class="body">
+          <div class="step-body">
             <h3>Optional, but do it</h3>
-            <p>Starts toss when you log in, with no console window sitting in your taskbar. It writes
-              one plain text file into your startup folder that you can read and delete by hand.</p>
+            <p>Starts toss when you log in, with no console window in your taskbar. It writes one plain
+              text file into your startup folder that you can read and delete by hand.</p>
             <div class="term">
-              <div class="term-bar"><i></i><i></i><i></i><span>terminal</span></div>
+              <div class="term-bar"><i></i><i></i><i></i><span>terminal</span>
+                <button class="term-copy" data-copy type="button">copy</button></div>
 <pre><span class="d">$</span> toss install</pre>
             </div>
           </div>
@@ -386,86 +162,98 @@
     </div>
   </section>
 
-  <section>
-    <p class="eyebrow">Every day after that</p>
-    <div class="stack">
-      <h2>Highlight, hold, done.</h2>
-      <div class="shot">
-        <img src="screenshot-phone.png" width="390" height="844"
-             alt="The toss page on a phone, showing a received link, a file called report.pdf with a Save button, and a box to send something back.">
+  <section class="section shell" id="use">
+    <div class="stack-lg">
+      <div class="stack-sm" data-reveal>
+        <p class="eyebrow">Every day after that</p>
+        <h2>Highlight, hold, done.</h2>
+      </div>
+      <div class="split" data-reveal>
+        <img src="screenshot-phone.png" width="390" height="844" loading="lazy"
+             alt="The toss page on a phone: a received link, a file called report.pdf with a Save button, and a box for sending something back.">
         <div class="stack">
           <p class="prose">Select a link, a paragraph, a block of code. Hold <kbd>right&#8209;ctrl</kbd> for
-            four tenths of a second. It copies the selection for you first, so there is no copy-then-send
-            dance, and it is on your phone by the time you let go. Files you copied in Explorer go the same way.</p>
-          <p class="prose">Going back the other way: type in the box and press enter, paste anywhere on the
-            page, or drop files onto it. Text lands on your laptop clipboard ready to paste. Files land in
-            your Downloads.</p>
-          <p class="prose">The pairing is remembered on both sides, so the phone rejoins on its own after it
-            sleeps, after you close the tab, and after either device reboots.</p>
+            four tenths of a second. It copies the selection for you first, so there is no
+            copy-then-send dance, and it has arrived by the time you let go. Files you copied in Explorer
+            go the same way.</p>
+          <p class="prose">Going back: type in the box and press enter, paste anywhere on the page, or
+            drop files onto it. Text lands on your laptop clipboard ready to paste. Files land in your
+            Downloads.</p>
+          <p class="prose">The pairing is remembered on both sides, so the phone rejoins on its own after
+            it sleeps, after you close the tab, and after either device reboots.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <section>
-    <p class="eyebrow">The pairing code</p>
-    <div class="stack">
-      <h2>Four words are the whole secret.</h2>
-      <p class="prose">They are picked from a list of 397 short, unambiguous words, so a code survives being
-        read out loud across a room. Here is one, generated the same way the tool does it:</p>
+  <section class="section shell" id="code">
+    <div class="stack-lg">
+      <div class="stack-sm" data-reveal>
+        <p class="eyebrow">The pairing code</p>
+        <h2>Four words are the whole secret.</h2>
+      </div>
+      <div class="stack" data-reveal>
+        <p class="prose">They come from a list of 397 short, unambiguous words, so a code survives being
+          read out loud across a room. Here is one, generated the way the tool generates it:</p>
 
-      <div class="coder">
-        <div class="coder-out" id="code" aria-live="polite">scout-gopher-crater-nest</div>
-        <div class="coder-row">
-          <button type="button" id="roll">Another one</button>
-          <small id="odds">about 34 bits, and six wrong guesses gets you blocked</small>
+        <div class="coder">
+          <div class="coder-out" id="code-out" aria-live="polite"><span id="code-words"></span></div>
+          <div class="coder-row">
+            <button class="btn" id="roll" type="button">Another one</button>
+            <small id="odds"></small>
+          </div>
+        </div>
+
+        <p class="prose">The code never crosses the network. Both sides stretch it through PBKDF2-SHA256 at
+          200,000 iterations into one AES-256 key. Joining is a challenge and response: the laptop sends
+          random bytes, you send back an HMAC, and anything that cannot produce it is dropped before it
+          sees anything at all.</p>
+        <p class="prose">Every item is sealed with AES-GCM before it leaves, so the laptop relays ciphertext
+          it has no way to open, and anyone sniffing the wifi sees nothing. Six wrong codes from one address
+          and that address stops being answered, which is what makes four words enough.</p>
+        <p class="prose">Both devices show the same six character <strong>session</strong> fingerprint
+          derived from that key. If they match, you are talking to each other. If they do not, something is
+          wrong, and that is worth knowing.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section shell" id="limits">
+    <div class="stack-lg">
+      <div class="stack-sm" data-reveal>
+        <p class="eyebrow">What will break</p>
+        <h2>Three things worth knowing first.</h2>
+      </div>
+      <div class="notes" data-reveal>
+        <div class="note">
+          <h3>College and office wifi will probably block it</h3>
+          <p>Many public networks turn on client isolation, which stops devices talking to each other
+            directly. On that kind of network the page will not connect at all, and nothing inside the
+            network can route around it. Home wifi works. A phone hotspot works.</p>
+        </div>
+        <div class="note">
+          <h3>The hotkey is Windows only right now</h3>
+          <p>It uses a raw key-state poll through ctypes, so there is nothing extra to install and no admin
+            rights needed, but it is Windows specific. Everywhere else the hub, the page and
+            <span class="tag">toss send</span> all work. You just do not get hold-to-send.</p>
+        </div>
+        <div class="note">
+          <h3>The laptop is the hub</h3>
+          <p>If it sleeps, the session ends. That is the intended shape rather than a limitation to fix.
+            There is no server in the middle keeping anything alive, which is the trade that makes the rest
+            of it true.</p>
         </div>
       </div>
-
-      <p class="prose">The code never crosses the network. Both sides stretch it through PBKDF2-SHA256 at
-        200,000 iterations into one AES-256 key. Joining is a challenge and response: the laptop sends random
-        bytes, you send back an HMAC, and anything that cannot produce it is dropped before it sees anything.</p>
-      <p class="prose">Every item is sealed with AES-GCM before it leaves, so the laptop relays ciphertext it
-        has no way to open, and anyone sniffing the wifi sees nothing. Six wrong codes from one address and
-        that address stops being answered, which is what makes four words enough.</p>
-      <p class="prose">Both devices show the same six character <strong>session</strong> fingerprint derived
-        from that key. If they match, you are talking to each other. If they do not, something is wrong, and
-        that is worth knowing.</p>
     </div>
   </section>
 
-  <section>
-    <p class="eyebrow">What will break</p>
-    <div class="stack">
-      <h2>Three things worth knowing before you try it.</h2>
-
-      <div class="note">
-        <h3>College and office wifi will probably block it</h3>
-        <p>Many public networks turn on client isolation, which stops devices talking to each other directly.
-          On that kind of network the page will not connect at all, and nothing inside the network can route
-          around it. Home wifi works. A phone hotspot works.</p>
+  <section class="section shell" id="reference">
+    <div class="stack-lg">
+      <div class="stack-sm" data-reveal>
+        <p class="eyebrow">Reference</p>
+        <h2>Every command.</h2>
       </div>
-
-      <div class="note">
-        <h3>The hotkey is Windows only right now</h3>
-        <p>It uses a raw key-state poll through ctypes, so there is nothing extra to install and no admin
-          rights needed, but it is Windows specific. Everywhere else the hub, the page and
-          <code>toss send</code> all work. You just do not get hold-to-send.</p>
-      </div>
-
-      <div class="note">
-        <h3>The laptop is the hub</h3>
-        <p>If it sleeps, the session ends. That is the intended shape rather than a limitation to fix. There
-          is no server in the middle to keep anything alive, which is the trade that makes the rest of it true.</p>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <p class="eyebrow">Reference</p>
-    <div class="stack">
-      <h2>Every command.</h2>
-      <div class="tablewrap">
+      <div class="tablewrap" data-reveal>
         <table>
           <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
           <tbody>
@@ -475,7 +263,7 @@
             <tr><td class="cmd">toss serve --hold 0.25</td><td class="what">Make the hold shorter or longer.</td></tr>
             <tr><td class="cmd">toss serve --no-grab</td><td class="what">Send only what is already on the clipboard, instead of copying the selection first.</td></tr>
             <tr><td class="cmd">toss send</td><td class="what">Send the clipboard from another terminal. No hotkey needed.</td></tr>
-            <tr><td class="cmd">toss send notes.pdf</td><td class="what">Send a file, or a bit of text, by argument.</td></tr>
+            <tr><td class="cmd">toss send notes.pdf</td><td class="what">Send a file, or a piece of text, by argument.</td></tr>
             <tr><td class="cmd">toss install</td><td class="what">Start on login, quietly.</td></tr>
             <tr><td class="cmd">toss status</td><td class="what">The code, the address, and every saved setting.</td></tr>
             <tr><td class="cmd">toss uninstall</td><td class="what">Stop starting on login.</td></tr>
@@ -485,12 +273,14 @@
     </div>
   </section>
 
-  <section>
-    <p class="eyebrow">Under it</p>
-    <div class="stack">
-      <h2>What is actually running.</h2>
-      <dl class="facts">
-        <div class="fact"><dt>laptop side</dt><dd>Python 3.10+, asyncio, <code>websockets</code> and <code>cryptography</code>. That is the whole dependency list.</dd></div>
+  <section class="section shell">
+    <div class="stack-lg">
+      <div class="stack-sm" data-reveal>
+        <p class="eyebrow">Under it</p>
+        <h2>What is actually running.</h2>
+      </div>
+      <dl class="facts" data-reveal>
+        <div class="fact"><dt>laptop side</dt><dd>Python 3.10+, asyncio, <span class="tag">websockets</span> and <span class="tag">cryptography</span>. That is the whole dependency list.</dd></div>
         <div class="fact"><dt>phone side</dt><dd>One HTML file and one JS file. No build step, no framework, no install. WebCrypto does the matching key derivation.</dd></div>
         <div class="fact"><dt>the page</dt><dd>Served under a strict Content-Security-Policy with no inline script and no outside origins, so it can only ever talk to the hub it came from.</dd></div>
         <div class="fact"><dt>on disk</dt><dd>Nothing that passes through is written anywhere. The only stored thing is the pairing itself, in a readable config file you can delete.</dd></div>
@@ -499,47 +289,17 @@
     </div>
   </section>
 
-  <footer>
+  <footer class="foot shell">
     <p>Built in an afternoon. MIT licensed.</p>
-    <p>If it does not connect, you are almost certainly on a network with client isolation. Try a phone hotspot before you try to debug it.</p>
+    <p>If it will not connect, you are almost certainly on a network with client isolation. Try a phone
+      hotspot before you try to debug it.</p>
   </footer>
 
-</div>
+</main>
 
-<script>
-  // The real wordlist is 397 words; this is a readable slice of it, picked the
-  // same way the tool picks: uniformly, with the browser's own randomness.
-  const WORDS = ("amber anchor arrow aspen atlas basil beacon birch bison bloom bronze cactus camel canoe " +
-    "carbon cedar cherry cinder citrus cliff clover cobalt comet copper coral cotton coyote crane crater " +
-    "crayon creek crown cyan daisy delta denim desert dock dolphin domino dragon drift dune eagle ember " +
-    "emerald fable falcon feather fennel finch flame flint flora flute forest fossil frost galaxy garden " +
-    "garlic gecko ginger glacier globe gopher granite gravel grotto guava hammer harbor harvest hazel heron " +
-    "hollow honey hornet indigo iris island ivory jade jaguar jasmine jewel jigsaw jungle juniper kayak " +
-    "kernel kettle kiosk kite koala lagoon lantern lapis lemon lentil lilac linen lotus lumber lunar lychee " +
-    "magnet mango maple marble marina meadow melon mesa meteor mint mirror mocha monsoon mural nebula nectar " +
-    "needle neon nest nickel nomad nugget oasis ocean olive onyx opal orbit orchid otter oyster pagoda panda " +
-    "papaya pebble pecan pelican pepper petal pewter phoenix pigment pivot pixel plasma plaza plum pollen " +
-    "poppy portal prairie prism puffin pumpkin quartz quiver rafter ranch rapid raven reef relay ribbon " +
-    "ridge ripple river robin rocket rodeo ruby saffron sage salmon sandal sapphire savanna scarlet scout " +
-    "sepia shale shell sierra silk silver siren slate sloth smoke socket solar sonar sorbet spark spiral " +
-    "spruce stamp statue stone storm summit sunset surf sycamore syrup talon tandem tango tapir teal tempo " +
-    "thistle thunder tiger timber toffee tomato topaz torch totem toucan tower trail trellis trophy tulip " +
-    "tundra turbo turtle tusk umber vanilla velvet verdant vessel vinyl violet viper vista vortex walnut " +
-    "walrus wasabi weaver whale wheat willow wisp wolf wombat woven yarn yodel yonder zebra zenith zephyr " +
-    "zigzag zinc zodiac").split(" ");
-
-  const out = document.getElementById("code");
-  const odds = document.getElementById("odds");
-
-  function roll() {
-    const picks = new Uint32Array(4);
-    crypto.getRandomValues(picks);
-    out.textContent = [...picks].map((n) => WORDS[n % WORDS.length]).join("-");
-  }
-
-  document.getElementById("roll").addEventListener("click", roll);
-  odds.textContent = "about " + (Math.log2(397) * 4).toFixed(0) +
-    " bits, and six wrong guesses gets that address blocked";
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/MotionPathPlugin.min.js"></script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>
