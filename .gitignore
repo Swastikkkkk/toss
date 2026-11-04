@@ -6,8 +6,7 @@ build/
 dist/
 *.egg-info/
 .pytest_cache/
-# only my throwaway test captures, never the site's own images
-/screenshot-desktop.png
+screenshot-*.png
 .env
 .env.local
 .DS_Store

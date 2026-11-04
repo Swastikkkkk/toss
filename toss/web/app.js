@@ -272,7 +272,33 @@ function save(item) {
 
 /* ---------- wiring ---------- */
 
+/* Browsers only expose WebCrypto on a secure origin. If this page was opened
+   over plain http on a LAN address there is no crypto at all, so say exactly
+   that instead of failing somewhere deep in the join. */
+function cryptoAvailable() {
+  return !!(window.crypto && window.crypto.subtle && window.isSecureContext);
+}
+
+function explainInsecure() {
+  const secure = location.href.replace(/^http:/, "https:");
+  const gate = $("#gate");
+  if (!gate) return;
+  gate.innerHTML =
+    '<div class="panel"><h2 style="margin:0 0 10px;font-size:19px">Open this over https</h2>' +
+    '<p style="margin:0 0 14px;color:var(--muted);font-size:15px">Your browser only allows encryption ' +
+    'on a secure address, so toss cannot run on a plain http link. Same machine, same code, one letter ' +
+    'different:</p>' +
+    '<p style="margin:0 0 14px"><a href="' + secure + '" style="color:var(--accent);word-break:break-all;' +
+    'font-family:ui-monospace,Menlo,monospace">' + secure + '</a></p>' +
+    '<p style="margin:0;color:var(--muted);font-size:14px">The first visit warns you about the ' +
+    'certificate. That is expected: it is self-signed and never leaves your laptop. Tap through it once.</p></div>';
+}
+
 function init() {
+  if (!cryptoAvailable()) {
+    explainInsecure();
+    return;
+  }
   const params = new URLSearchParams(location.hash.slice(1));
   const fromLink = params.get("code");
   const saved = store.get("code");

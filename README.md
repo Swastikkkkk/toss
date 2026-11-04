@@ -62,6 +62,15 @@ It prints a code, a QR and the address to open. Then it waits.
 scan the QR which carries the code in the link. That page stays open. It is the
 whole receiving app.
 
+The address is **https**, and the first visit on each device shows a certificate
+warning. That is expected and you tap through it once. The reason is not
+cosmetic: browsers only expose WebCrypto on a secure origin, so over plain
+`http://192.168.1.5:7777` the page has no `crypto.subtle` at all and cannot
+decrypt anything. The certificate is self-signed, generated on first run, and
+the private key never leaves your machine. `toss serve` prints its fingerprint
+so you can check what your phone saw. `--no-https` exists for local testing and
+phones cannot join when you use it.
+
 **To send:** highlight something and hold `right-ctrl` for 0.4 seconds. It
 copies the selection for you first, so there is no copy-then-send dance. Files
 you copied in Explorer go too. If you would rather it only ever read what is

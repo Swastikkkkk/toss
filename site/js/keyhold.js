@@ -22,6 +22,7 @@ export function initKeyHold({ gsap, reduced }) {
   let holding = false;
   let timer = null;
   let flying = false;
+  let played = false;   // set once the visitor takes over, so autoplay backs off
 
   const setHint = (text) => { if (hint) hint.innerHTML = text; };
 
@@ -81,6 +82,7 @@ export function initKeyHold({ gsap, reduced }) {
     if (event.type === "keydown" && event.repeat) return;
     if (holding || flying) return;
     event.preventDefault();
+    played = true;
     holding = true;
     key.dataset.held = "true";
     setHint("keep holding...");
@@ -101,6 +103,18 @@ export function initKeyHold({ gsap, reduced }) {
     setHint("too quick. hold it for <b>0.4 seconds</b>");
   }
 
+  /* The real key works too: hold right-ctrl anywhere on the page and the demo
+     does exactly what the tool does on your laptop. */
+  window.addEventListener("keydown", (e) => {
+    if (e.code !== "ControlRight") return;
+    e.preventDefault();
+    played = true;
+    start(e);
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "ControlRight") stop();
+  });
+
   key.addEventListener("pointerdown", start);
   key.addEventListener("pointerup", stop);
   key.addEventListener("pointercancel", stop);
@@ -114,4 +128,23 @@ export function initKeyHold({ gsap, reduced }) {
   // a stray release anywhere should not leave the ring stuck
   window.addEventListener("pointerup", stop);
   window.addEventListener("blur", stop);
+
+  /* Play it through once on arrival. Showing the gesture beats describing it,
+     and it stops the moment you touch anything yourself. */
+  if (!reduced) {
+    setTimeout(() => {
+      if (played || holding || flying) return;
+      key.dataset.held = "true";
+      setHint("holding...");
+      ring(1, HOLD_MS);
+      setTimeout(() => {
+        key.dataset.held = "false";
+        if (played || holding) return;
+        deliver();
+        setTimeout(() => {
+          if (!played) setHint("now you: hold <b>right ctrl</b>, or the key above");
+        }, 900);
+      }, HOLD_MS);
+    }, 1100);
+  }
 }

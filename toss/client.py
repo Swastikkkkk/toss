@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import ssl
 
 import websockets
 
@@ -13,10 +14,13 @@ CHUNK = 192 * 1024
 
 
 class Client:
-    def __init__(self, url: str, code: str, name: str = "laptop"):
+    def __init__(self, url: str, code: str, name: str = "laptop", insecure: bool = False):
         self.url = url.rstrip("/")
         self.code = code
         self.name = name
+        # the hub's certificate is self-signed by design; the pairing code,
+        # not the certificate, is what proves who we are talking to
+        self.insecure = insecure
         self.ws = None
         self.key = None
         self.fingerprint = None
@@ -31,7 +35,13 @@ class Client:
 
     async def connect(self, timeout: float = 10.0):
         ws_url = self.url.replace("http://", "ws://").replace("https://", "wss://")
-        self.ws = await asyncio.wait_for(websockets.connect(ws_url, max_size=16 * 1024 * 1024), timeout)
+        kwargs = {"max_size": 16 * 1024 * 1024}
+        if ws_url.startswith("wss://") and self.insecure:
+            relaxed = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            relaxed.check_hostname = False
+            relaxed.verify_mode = ssl.CERT_NONE
+            kwargs["ssl"] = relaxed
+        self.ws = await asyncio.wait_for(websockets.connect(ws_url, **kwargs), timeout)
         hello = json.loads(await asyncio.wait_for(self.ws.recv(), timeout))
         if hello.get("t") != "hello":
             raise ConnectionError("that does not look like a toss hub")

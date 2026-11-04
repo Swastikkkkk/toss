@@ -194,12 +194,13 @@ class Hub:
 
     # ---- lifecycle --------------------------------------------------------
 
-    async def run(self, host: str = "0.0.0.0", port: int = 7777):
+    async def run(self, host: str = "0.0.0.0", port: int = 7777, ssl_context=None):
         async with serve(
             self.handler, host, port,
             process_request=self._http,
             max_size=MAX_MESSAGE,
             ping_interval=20,
+            ssl=ssl_context,
         ) as server:
             self.port = port
             await server.serve_forever()

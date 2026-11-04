@@ -7,7 +7,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import autostart, clipboard, config
+from . import autostart, clipboard, config, tls
 from .client import Client
 from .crypto import make_code, normalize_code
 from .hub import Hub, lan_ip
@@ -53,7 +53,20 @@ async def cmd_serve(args):
 
     hub = Hub(code=code, salt=salt)
     ip = args.ip or lan_ip()
-    url = f"http://{ip}:{args.port}"
+
+    # Browsers only hand out WebCrypto on a secure origin, and a LAN address
+    # over plain http is not one, so without TLS a phone cannot join at all.
+    ssl_context = None
+    scheme = "http"
+    if not args.no_https:
+        try:
+            ssl_context = tls.context(config.CONFIG_DIR, ip)
+            scheme = "https"
+        except Exception as exc:
+            print(f"  could not set up TLS ({exc}); falling back to http")
+            print("  phones will not be able to join over http")
+
+    url = f"{scheme}://{ip}:{args.port}"
     link = f"{url}/#code={hub.code}"
 
     returning = bool(saved.get("code")) and not args.new_code and not args.code
@@ -78,18 +91,25 @@ async def cmd_serve(args):
             print()
     print(f"  Open {url} on your other device and enter the code,")
     print("  or scan the QR which carries the code with it.")
+    if scheme == "https":
+        print()
+        print("  First visit on each device shows a certificate warning. That is")
+        print("  expected: the certificate is self-signed and never leaves your")
+        print("  machine. Tap through it once and the device remembers.")
+        print(f"  certificate  {tls.fingerprint(config.CONFIG_DIR, ip)}")
     if not autostart.installed():
         print("  Tired of starting this? toss install")
     print()
 
-    server = asyncio.create_task(hub.run(host=args.host, port=args.port))
+    server = asyncio.create_task(hub.run(host=args.host, port=args.port, ssl_context=ssl_context))
 
     sender = None
     if not args.no_hotkey:
         from . import hotkey
         if hotkey.available():
             await asyncio.sleep(0.4)
-            sender = Client(f"http://127.0.0.1:{args.port}", hub.code, name=args.name)
+            sender = Client(f"{scheme}://127.0.0.1:{args.port}", hub.code, name=args.name,
+                            insecure=scheme == "https")
             await sender.connect()
             what = "whatever is selected" if not args.no_grab else "your clipboard"
             print(f"  Hold {args.key} for {args.hold:.1f}s to send {what}.")
@@ -159,9 +179,9 @@ async def cmd_send(args):
     if not args.code:
         print("toss: no pairing code yet. Run `toss serve` once first.", file=sys.stderr)
         return 1
-    url = args.url or f"http://127.0.0.1:{args.port}"
+    url = args.url or f"https://127.0.0.1:{args.port}"
     code = normalize_code(args.code)
-    async with Client(url, code, name=args.name) as c:
+    async with Client(url, code, name=args.name, insecure=url.startswith("https")) as c:
         if args.what:
             target = Path(args.what)
             if target.is_file():
@@ -239,6 +259,8 @@ def build_parser():
     s.add_argument("--no-grab", action="store_true",
                    help="send the clipboard as it is, instead of copying the selection first")
     s.add_argument("--no-qr", action="store_true")
+    s.add_argument("--no-https", action="store_true",
+                   help="serve plain http; phones cannot join, for local testing only")
     s.add_argument("--quiet", action="store_true", help="skip the QR, for running on login")
     s.set_defaults(fn=cmd_serve)
 
