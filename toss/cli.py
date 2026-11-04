@@ -85,17 +85,17 @@ async def cmd_serve(args):
     hub = Hub(code=code, salt=salt)
     ip = args.ip or lan_ip()
 
-    # Browsers only hand out WebCrypto on a secure origin, and a LAN address
-    # over plain http is not one, so without TLS a phone cannot join at all.
+    # Plain http by default: the phone page carries its own audited crypto,
+    # so there is no certificate warning to tap through. --https is opt-in.
     ssl_context = None
     scheme = "http"
-    if not args.no_https:
+    if args.https:
         try:
             ssl_context = tls.context(config.CONFIG_DIR, ip)
             scheme = "https"
         except Exception as exc:
-            print(f"  could not set up TLS ({exc}); falling back to http")
-            print("  phones will not be able to join over http")
+            print(f"  could not set up TLS ({exc}); using http")
+    config.update(scheme=scheme)
 
     url = f"{scheme}://{ip}:{args.port}"
     link = f"{url}/#code={hub.code}"
@@ -103,15 +103,6 @@ async def cmd_serve(args):
     returning = bool(saved.get("code")) and not args.new_code and not args.code
 
     print()
-    print(f"  toss is up on {url}")
-    print()
-    print(f"  code         {hub.code}")
-    print(f"  session      {hub.fingerprint}")
-    print()
-    if returning:
-        print("  Devices you already paired rejoin on their own.")
-        print("  New code whenever you want it: toss serve --new-code")
-        print()
     if not args.no_qr and not args.quiet:
         art = qr(link)
         if art:
@@ -120,16 +111,11 @@ async def cmd_serve(args):
         else:
             print("  (pip install qrcode for a scannable QR here)")
             print()
-    print(f"  Open {url} on your other device and enter the code,")
-    print("  or scan the QR which carries the code with it.")
-    if scheme == "https":
-        print()
-        print("  First visit on each device shows a certificate warning. That is")
-        print("  expected: the certificate is self-signed and never leaves your")
-        print("  machine. Tap through it once and the device remembers.")
-        print(f"  certificate  {tls.fingerprint(config.CONFIG_DIR, ip)}")
-    if not autostart.installed():
-        print("  Tired of starting this? toss install")
+    print("  Scan with your phone's camera. It connects by itself.")
+    if returning:
+        print("  Phones you paired before reconnect on their own.")
+    print(f"  No camera? Open {url} and type  {hub.code}")
+    print(f"  session {hub.fingerprint}")
     print()
 
     server = asyncio.create_task(hub.run(host=args.host, port=args.port, ssl_context=ssl_context))
@@ -290,8 +276,11 @@ async def cmd_serve(args):
 
     if sender:
         async def receive():
-            async for item in sender.listen():
+            async for item in sender.listen(peers=True):
                 who = item.get("from") or "a device"
+                if item["kind"] == "peer":
+                    print(f"  {who} {'connected' if item['event'] == 'joined' else 'disconnected'}", flush=True)
+                    continue
                 if item["kind"] == "text":
                     text = item["data"]
                     echo["text"] = text
@@ -343,7 +332,7 @@ async def cmd_send(args):
     if not args.code:
         print("toss: no pairing code yet. Run `toss serve` once first.", file=sys.stderr)
         return 1
-    url = args.url or f"https://127.0.0.1:{args.port}"
+    url = args.url or f"{config.load().get('scheme', 'http')}://127.0.0.1:{args.port}"
     code = normalize_code(args.code)
     async with Client(url, code, name=args.name, insecure=url.startswith("https")) as c:
         if args.what:
@@ -393,7 +382,7 @@ async def cmd_status(args):
     print()
     print(f"  code         {code}")
     print(f"  session      {fingerprint(derive_key(code, salt))}")
-    print(f"  address      https://{lan_ip()}:{data.get('port', DEFAULT_PORT)}")
+    print(f"  address      {data.get('scheme', 'http')}://{lan_ip()}:{data.get('port', DEFAULT_PORT)}")
     print(f"  hold         {data.get('key')} for {data.get('hold')}s")
     print(f"  grab         {'copies your selection first' if data.get('grab') else 'clipboard only'}")
     print(f"  sync         {'on, every copy goes to your phone' if data.get('sync', True) else 'off'}")
@@ -406,7 +395,7 @@ async def cmd_status(args):
 
 def build_parser():
     p = argparse.ArgumentParser(prog="toss", description="Hold a key, it lands on your other device.")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    sub = p.add_subparsers(dest="cmd")
 
     s = sub.add_parser("serve", help="run the hub on this laptop")
     saved = config.load()
@@ -417,7 +406,7 @@ def build_parser():
     s.add_argument("--new-code", action="store_true", help="rotate the pairing code")
     s.add_argument("--key", default=saved.get("key", "right-ctrl"), help="key to hold")
     s.add_argument("--hold", type=float, default=saved.get("hold", 0.4), help="seconds to hold")
-    s.add_argument("--name", default=saved.get("name", "this laptop"))
+    s.add_argument("--name", default=saved.get("name", "your laptop"))
     s.add_argument("--inbox", default=saved.get("inbox", "~/Downloads"),
                    help="where received files are saved")
     s.add_argument("--no-hotkey", action="store_true", help="hub only, no keyboard watching")
@@ -426,8 +415,8 @@ def build_parser():
     s.add_argument("--no-grab", action="store_true",
                    help="send the clipboard as it is, instead of copying the selection first")
     s.add_argument("--no-qr", action="store_true")
-    s.add_argument("--no-https", action="store_true",
-                   help="serve plain http; phones cannot join, for local testing only")
+    s.add_argument("--https", action="store_true",
+                   help="serve https with a self-signed certificate (phones see a warning once)")
     s.add_argument("--quiet", action="store_true", help="skip the QR, for running on login")
     s.set_defaults(fn=cmd_serve)
 
@@ -453,6 +442,9 @@ def build_parser():
 
 
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if not argv or argv[0].startswith("-") and argv[0] not in ("-h", "--help"):
+        argv.insert(0, "serve")   # bare `toss` just starts it
     args = build_parser().parse_args(argv)
     try:
         return asyncio.run(args.fn(args)) or 0

@@ -84,13 +84,15 @@ class Client:
             }))
         return total
 
-    async def listen(self):
+    async def listen(self, peers=False):
         """Yield items other devices send. Files arrive reassembled."""
         pending: dict[str, dict] = {}
         async for raw in self.ws:
             msg = json.loads(raw)
             kind = msg.get("t")
-            if kind == "item":
+            if kind in ("joined", "left") and peers:
+                yield {"kind": "peer", "event": kind, "from": (msg.get("peer") or {}).get("name")}
+            elif kind == "item":
                 payload = open_sealed(self.key, msg)
                 payload["from"] = (msg.get("from") or {}).get("name")
                 yield payload

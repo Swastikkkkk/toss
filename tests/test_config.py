@@ -74,13 +74,20 @@ def test_the_code_is_the_only_secret_stored():
     assert set(stored) <= set(config.DEFAULTS) | {"code", "salt"}
 
 
-def test_status_prints_the_https_address(capsys, monkeypatch):
-    """serve speaks https because phones need a secure origin for WebCrypto.
-    status must print the same scheme, or people copy a dead link."""
+def test_status_prints_the_scheme_serve_used(capsys, monkeypatch):
+    """serve defaults to http and remembers the scheme; status must match it."""
     import asyncio
-    from toss import cli
+    from toss import cli, config
     monkeypatch.setattr(cli, "lan_ip", lambda: "192.168.1.5")
     asyncio.run(cli.cmd_status(None))
-    out = capsys.readouterr().out
-    assert "https://192.168.1.5:" in out
-    assert "http://192.168.1.5" not in out
+    assert "http://192.168.1.5:" in capsys.readouterr().out
+    config.update(scheme="https")
+    asyncio.run(cli.cmd_status(None))
+    assert "https://192.168.1.5:" in capsys.readouterr().out
+
+
+def test_bare_toss_runs_serve():
+    from toss import cli
+    import sys
+    p = cli.build_parser()
+    assert p.parse_args(["serve", "--https"]).https is True

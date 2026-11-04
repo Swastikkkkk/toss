@@ -53,23 +53,22 @@ On Windows, double click `start.bat`. To hack on it, clone and
 **On the laptop:**
 
 ```bash
-toss serve
+toss
 ```
 
-It prints a code, a QR and the address to open. Then it waits.
+It prints a QR. **Scan it with your phone's camera. That is the whole setup.**
+The page opens, connects by itself and stays connected. No code to type, no
+name to pick, no certificate warning. Add it to your home screen and it opens
+like an app and reconnects on its own after that.
 
-**On the other device:** open that address in any browser and enter the code, or
-scan the QR which carries the code in the link. That page stays open. It is the
-whole receiving app.
+No camera? Open the address it prints and type the four words.
 
-The address is **https**, and the first visit on each device shows a certificate
-warning. That is expected and you tap through it once. The reason is not
-cosmetic: browsers only expose WebCrypto on a secure origin, so over plain
-`http://192.168.1.5:7777` the page has no `crypto.subtle` at all and cannot
-decrypt anything. The certificate is self-signed, generated on first run, and
-the private key never leaves your machine. `toss serve` prints its fingerprint
-so you can check what your phone saw. `--no-https` exists for local testing and
-phones cannot join when you use it.
+The page is plain http on your wifi. Browsers only hand WebCrypto to https
+pages, so the page carries its own copy of the audited
+[noble](https://github.com/paulmillr/noble-ciphers) crypto (AES-256-GCM,
+PBKDF2, HMAC) and the hub still only ever sees ciphertext. `toss --https`
+serves a self-signed certificate instead if you want the browser's own
+clipboard APIs; phones then show a warning once.
 
 **To send:** highlight something and hold `right-ctrl` for 0.4 seconds. It
 copies the selection for you first, so there is no copy-then-send dance. Files
@@ -239,7 +238,7 @@ machine, since none of that runs in CI:
   Windows' own decoder, for both bitmap formats at 24 and 32 bit
 - a browser-style PNG copy passed through untouched, and text winning when an
   app also puts a picture of it there
-- through the real hub over https: an image, a PDF and text reaching a phone
+- through the real hub: an image, a PDF and text reaching a phone
   client, a Word file and an image from the phone landing on the Windows
   clipboard ready to paste, with nothing echoing back
 - a keyboard hook confirming toss presses Ctrl+Insert and never C

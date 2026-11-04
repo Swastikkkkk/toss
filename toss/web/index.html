@@ -97,28 +97,19 @@
 <body>
 <div class="wrap">
   <h1>toss<span>.</span></h1>
-  <p class="tag">Send a link, a note or a file to your other device. Over your wifi, nothing in between.</p>
+  <p class="tag">Copy on your laptop, it is here. Encrypted, over your wifi.</p>
 
   <section id="gate">
     <form id="join" class="panel" autocomplete="off">
       <div class="field">
-        <label for="code">Pairing code from your laptop</label>
+        <label for="code">Code from your laptop</label>
         <input id="code" name="code" placeholder="amber-fox-tiger-reef" autocapitalize="off" autocorrect="off" spellcheck="false" required>
       </div>
-      <div class="field">
-        <label for="name">Call this device</label>
-        <input id="name" name="name" placeholder="my phone" maxlength="40">
-      </div>
-      <button class="primary" type="submit">Join</button>
+      <button class="primary" type="submit">Connect</button>
       <div class="err" id="join-error"></div>
     </form>
     <footer>
-      You only do this once. The code is remembered on this device and the page
-      rejoins on its own after that, so add it to your home screen and it behaves
-      like an app.
-      <br><br>
-      The code is the only secret. It turns into the key that encrypts everything,
-      so the laptop relays what you send without being able to read it.
+      Scanning the QR fills this in and connects by itself. You only ever do it once.
     </footer>
   </section>
 
@@ -141,7 +132,7 @@
       <button id="latest-save" class="big" type="button" hidden>Save image</button>
     </div>
 
-    <button id="send-clipboard" class="big" type="button">Send my clipboard to the laptop</button>
+    <button id="send-clipboard" class="big" type="button">Send to my laptop</button>
 
     <form id="send" class="panel">
       <div class="field">

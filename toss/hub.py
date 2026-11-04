@@ -84,7 +84,7 @@ class Hub:
             return None
         path = request.path.split("?")[0].split("#")[0]
         routes = {
-            "/": "index.html", "/index.html": "index.html", "/app.js": "app.js",
+            "/": "index.html", "/index.html": "index.html", "/app.js": "app.js", "/vendor-crypto.js": "vendor-crypto.js",
             "/manifest.json": "manifest.json",
             "/icon-192.png": "icon-192.png", "/icon-512.png": "icon-512.png",
             "/apple-touch-icon.png": "apple-touch-icon.png",

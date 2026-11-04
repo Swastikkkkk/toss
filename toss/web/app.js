@@ -17,43 +17,75 @@ const store = {
   drop(k) { try { localStorage.removeItem("toss-" + k); } catch {} },
 };
 
-/* ---------- crypto, matching toss/crypto.py ---------- */
+import { gcm, pbkdf2Async, hmac, sha256 } from "./vendor-crypto.js";
+
+/* ---------- crypto, matching toss/crypto.py ----------
+   Browsers only give WebCrypto to https pages. toss runs on plain http on
+   your wifi so there is no certificate warning, so the audited noble library
+   does the work instead. PBKDF2 uses the native one when it exists, it is
+   faster. The derived key is cached so reopening the page is instant. */
+
+const native = !!(window.isSecureContext && window.crypto && crypto.subtle);
 
 async function deriveKey(code, saltB64, iterations) {
   const normalized = String(code).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").join("-");
-  const base = await crypto.subtle.importKey("raw", enc.encode(normalized), "PBKDF2", false, ["deriveKey", "deriveBits"]);
+  const iters = iterations || ITERATIONS;
+  const cacheId = "key-" + bytesToB64(sha256(enc.encode(`${normalized}|${saltB64}|${iters}`))).slice(0, 16);
+  const cached = store.get(cacheId);
+  if (cached) return { raw: b64ToBytes(cached) };
   const salt = b64ToBytes(saltB64);
-  const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", salt, iterations: iterations || ITERATIONS, hash: "SHA-256" }, base, 256);
-  return {
-    raw: new Uint8Array(bits),
-    aes: await crypto.subtle.importKey("raw", bits, "AES-GCM", false, ["encrypt", "decrypt"]),
-    hmac: await crypto.subtle.importKey("raw", bits, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]),
-  };
+  let raw;
+  if (native) {
+    const base = await crypto.subtle.importKey("raw", enc.encode(normalized), "PBKDF2", false, ["deriveBits"]);
+    raw = new Uint8Array(await crypto.subtle.deriveBits(
+      { name: "PBKDF2", salt, iterations: iters, hash: "SHA-256" }, base, 256));
+  } else {
+    raw = await pbkdf2Async(sha256, enc.encode(normalized), salt, { c: iters, dkLen: 32 });
+  }
+  store.set(cacheId, bytesToB64(raw));
+  return { raw };
 }
 
 async function proof(key, challengeB64) {
-  const sig = await crypto.subtle.sign("HMAC", key.hmac, b64ToBytes(challengeB64));
-  return bytesToB64(new Uint8Array(sig));
+  return bytesToB64(hmac(sha256, key.raw, b64ToBytes(challengeB64)));
 }
 
 async function fingerprint(key) {
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256",
-    concat(enc.encode("toss-fingerprint"), key.raw)));
+  const digest = sha256(concat(enc.encode("toss-fingerprint"), key.raw));
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   return [...digest.slice(0, 6)].map((b) => alphabet[b % alphabet.length]).join("");
 }
 
 async function seal(key, bytes) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key.aes, bytes);
-  return { iv: bytesToB64(iv), ct: bytesToB64(new Uint8Array(ct)) };
+  return { iv: bytesToB64(iv), ct: bytesToB64(gcm(key.raw, iv).encrypt(bytes)) };
 }
 
 async function unseal(key, env) {
-  const plain = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: b64ToBytes(env.iv) }, key.aes, b64ToBytes(env.ct));
-  return new Uint8Array(plain);
+  return gcm(key.raw, b64ToBytes(env.iv)).decrypt(b64ToBytes(env.ct));
+}
+
+/* Copy text without the Clipboard API, which http pages do not get.
+   Works inside a tap on iPhone and Android. */
+function legacyCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;font-size:16px";
+  document.body.appendChild(ta);
+  ta.select();
+  ta.setSelectionRange(0, text.length);
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch {}
+  ta.remove();
+  return ok;
+}
+
+async function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try { await navigator.clipboard.writeText(text); return true; } catch {}
+  }
+  return legacyCopy(text);
 }
 
 function bytesToB64(bytes) {
@@ -257,6 +289,7 @@ async function tryWrite() {
 }
 
 function writeClip() {
+  if (!navigator.clipboard) return Promise.reject(new Error("no clipboard api"));
   if (latestClip.type === "text") return navigator.clipboard.writeText(latestClip.text);
   if (!window.ClipboardItem || !navigator.clipboard.write) return Promise.reject(new Error("no image clipboard"));
   return navigator.clipboard.write([new ClipboardItem({ [latestClip.mime]: latestClip.blob })]);
@@ -266,7 +299,8 @@ async function copyLatest() {
   if (!latestClip) return;
   const btn = $("#latest-copy");
   try {
-    await writeClip();
+    if (latestClip.type === "text") { if (!(await copyText(latestClip.text))) throw new Error("no"); }
+    else await writeClip();
     btn.textContent = "On your clipboard";
     btn.classList.add("done");
     toast("Copied");
@@ -301,6 +335,10 @@ async function saveLatest() {
 /* The other direction. Reading the clipboard always needs a tap, and iPhone
    shows its own Paste confirmation on top of that, which is Apple's rule. */
 async function sendMyClipboard() {
+  if (!navigator.clipboard) {
+    $("#compose").focus();
+    return toast("Long-press the box, Paste, then Send");
+  }
   try {
     // one read() covers both, so iPhone only shows its Paste prompt once
     if (navigator.clipboard && navigator.clipboard.read) {
@@ -453,48 +491,21 @@ async function save(item) {
 
 /* ---------- wiring ---------- */
 
-/* Browsers only expose WebCrypto on a secure origin. If this page was opened
-   over plain http on a LAN address there is no crypto at all, so say exactly
-   that instead of failing somewhere deep in the join. */
-function cryptoAvailable() {
-  return !!(window.crypto && window.crypto.subtle && window.isSecureContext);
-}
-
-function explainInsecure() {
-  const secure = location.href.replace(/^http:/, "https:");
-  const gate = $("#gate");
-  if (!gate) return;
-  gate.innerHTML =
-    '<div class="panel"><h2 style="margin:0 0 10px;font-size:19px">Open this over https</h2>' +
-    '<p style="margin:0 0 14px;color:var(--muted);font-size:15px">Your browser only allows encryption ' +
-    'on a secure address, so toss cannot run on a plain http link. Same machine, same code, one letter ' +
-    'different:</p>' +
-    '<p style="margin:0 0 14px"><a href="' + secure + '" style="color:var(--accent);word-break:break-all;' +
-    'font-family:ui-monospace,Menlo,monospace">' + secure + '</a></p>' +
-    '<p style="margin:0;color:var(--muted);font-size:14px">The first visit warns you about the ' +
-    'certificate. That is expected: it is self-signed and never leaves your laptop. Tap through it once.</p></div>';
-}
-
 function init() {
-  if (!cryptoAvailable()) {
-    explainInsecure();
-    return;
-  }
   const params = new URLSearchParams(location.hash.slice(1));
   const fromLink = params.get("code");
   const saved = store.get("code");
   if (fromLink) $("#code").value = fromLink;
   else if (saved) $("#code").value = saved;
-  $("#name").value = store.get("name") || guessName();
 
   $("#join").addEventListener("submit", async (e) => {
     e.preventDefault();
     const code = $("#code").value.trim();
-    const name = $("#name").value.trim() || "a device";
+    const name = store.get("name") || guessName();
     if (!code) return;
     $("#join-error").textContent = "";
     $("#join button").disabled = true;
-    $("#join button").textContent = "Joining...";
+    $("#join button").textContent = "Connecting...";
     try {
       const info = await connect(code, name);
       state.code = code;
@@ -503,6 +514,7 @@ function init() {
       state.retry = 0;
       store.set("name", name);
       store.set("code", code);   // so you never type it twice
+      if (location.hash) history.replaceState(null, "", location.pathname);
       $("#gate").hidden = true;
       $("#room").hidden = false;
       $("#fp").textContent = info.fingerprint;
@@ -514,7 +526,7 @@ function init() {
       $("#join-error").textContent = err.message;
     } finally {
       $("#join button").disabled = false;
-      $("#join button").textContent = "Join";
+      $("#join button").textContent = "Connect";
     }
   });
 
@@ -582,8 +594,7 @@ function init() {
     if (!btn) return;
     if (btn.dataset.copy !== undefined) {
       const it = items[+btn.dataset.copy];
-      try { await navigator.clipboard.writeText(it.data); toast("Copied"); }
-      catch { toast("Could not reach the clipboard"); }
+      toast((await copyText(it.data)) ? "Copied" : "Long-press the text to copy");
     } else if (btn.dataset.save !== undefined) {
       save(items[+btn.dataset.save]);
     } else if (btn.dataset.open !== undefined) {
@@ -592,21 +603,12 @@ function init() {
   });
 }
 
-/** A device that has paired before should not be asked anything at all.
-    A fresh QR link still gets to name itself, which is a one-time thing. */
+/** Scanning the QR opens this page with the code in the link, and a device
+    that paired before has it stored. Either way, connect with no taps. */
 async function autoJoin() {
-  const code = store.get("code");
-  if (!code) return;
-  $("#join-error").textContent = "";
-  $("#join button").textContent = "Reconnecting...";
-  $("#join button").disabled = true;
-  try {
-    $("#code").value = code;
-    $("#join").requestSubmit();
-  } catch {
-    $("#join button").disabled = false;
-    $("#join button").textContent = "Join";
-  }
+  if (!$("#code").value.trim()) return;
+  $("#join button").textContent = "Connecting...";
+  $("#join").requestSubmit();
 }
 
 function guessName() {
