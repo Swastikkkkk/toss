@@ -54,7 +54,7 @@ async def cmd_serve(args):
     else:
         code, salt = config.pairing(new=args.new_code)
     config.update(key=args.key, hold=args.hold, port=args.port,
-                  inbox=args.inbox, name=args.name, grab=not args.no_grab)
+                  inbox=args.inbox, name=args.name, grab=not args.no_grab, sync=not args.no_sync)
 
     hub = Hub(code=code, salt=salt)
     ip = args.ip or lan_ip()
@@ -288,9 +288,10 @@ async def cmd_status(args):
     print()
     print(f"  code         {code}")
     print(f"  session      {fingerprint(derive_key(code, salt))}")
-    print(f"  address      http://{lan_ip()}:{data.get('port', DEFAULT_PORT)}")
+    print(f"  address      https://{lan_ip()}:{data.get('port', DEFAULT_PORT)}")
     print(f"  hold         {data.get('key')} for {data.get('hold')}s")
     print(f"  grab         {'copies your selection first' if data.get('grab') else 'clipboard only'}")
+    print(f"  sync         {'on, every copy goes to your phone' if data.get('sync', True) else 'off'}")
     print(f"  inbox        {data.get('inbox')}")
     print(f"  on login     {'yes' if autostart.installed() else 'no'}")
     print(f"  settings     {config.CONFIG_FILE}")

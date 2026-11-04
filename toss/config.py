@@ -24,6 +24,7 @@ DEFAULTS = {
     "inbox": "~/Downloads",
     "name": "this laptop",
     "grab": True,
+    "sync": True,
 }
 
 
