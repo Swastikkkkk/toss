@@ -117,7 +117,9 @@ async function handle(msg) {
   else if (msg.t === "left") { state.peers = state.peers.filter((p) => p.id !== msg.peer.id); renderPeers(); }
   else if (msg.t === "item") {
     const payload = JSON.parse(dec.decode(await unseal(state.key, msg)));
-    addItem({ ...payload, from: msg.from && msg.from.name });
+    const from = msg.from && msg.from.name;
+    if (payload.sync) onSync(payload.data, from);
+    else addItem({ ...payload, from });
   } else if (msg.t === "chunk") {
     const part = await unseal(state.key, msg);
     let entry = state.pending.get(msg.id);
@@ -161,6 +163,70 @@ async function sendFile(file) {
 /* ---------- ui ---------- */
 
 const items = [];
+
+/* A copy on the laptop lands here. Chrome and Android let a focused page write
+   the clipboard on its own, so try that first. Safari on iPhone refuses any
+   clipboard write that is not inside a tap, so there the latest clip stays
+   pinned at the top behind one big button. */
+let latestClip = "";
+
+async function onSync(text, from) {
+  latestClip = text;
+  const card = $("#latest");
+  if (!card) return;
+  card.hidden = false;
+  $("#latest-text").textContent = text.length > 400 ? text.slice(0, 400) + "..." : text;
+  $("#latest-from").textContent = from ? `copied on ${from}` : "copied on your laptop";
+  const btn = $("#latest-copy");
+  btn.textContent = "Tap to copy";
+  btn.classList.remove("done");
+
+  let auto = false;
+  if (document.hasFocus() && navigator.clipboard && navigator.clipboard.writeText) {
+    try { await navigator.clipboard.writeText(text); auto = true; } catch { auto = false; }
+  }
+  if (auto) {
+    btn.textContent = "On your clipboard";
+    btn.classList.add("done");
+    toast("Copied to this device");
+  } else {
+    toast("New clip from your laptop");
+  }
+  if (navigator.vibrate) navigator.vibrate(40);
+}
+
+async function copyLatest() {
+  if (!latestClip) return;
+  const btn = $("#latest-copy");
+  try {
+    await navigator.clipboard.writeText(latestClip);
+    btn.textContent = "On your clipboard";
+    btn.classList.add("done");
+    toast("Copied");
+  } catch {
+    // last resort: select it so the native Copy menu is one tap away
+    const range = document.createRange();
+    range.selectNodeContents($("#latest-text"));
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    toast("Selected. Tap Copy");
+  }
+}
+
+/* The other direction. Reading the clipboard always needs a tap, and iPhone
+   shows its own Paste confirmation on top of that, which is Apple's rule. */
+async function sendMyClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text || !text.trim()) return toast("Your clipboard is empty");
+    await sendText(text);
+    toast("Sent to your laptop's clipboard");
+  } catch {
+    $("#compose").focus();
+    toast("Paste into the box, then Send");
+  }
+}
 
 function addItem(item) {
   items.unshift(item);
@@ -369,6 +435,9 @@ function init() {
       $("#send").requestSubmit();
     }
   });
+
+  $("#latest-copy").addEventListener("click", copyLatest);
+  $("#send-clipboard").addEventListener("click", sendMyClipboard);
 
   $("#send").addEventListener("submit", async (e) => {
     e.preventDefault();

@@ -65,8 +65,9 @@ class Client:
         if self.ws:
             await self.ws.close()
 
-    async def send_text(self, text: str):
-        body = {"kind": "text", "data": text}
+    async def send_text(self, text: str, sync: bool = False):
+        # sync marks an automatic clipboard copy, so the phone can pin it
+        body = {"kind": "text", "data": text, "sync": sync}
         await self.ws.send(json.dumps({"t": "item", **seal(self.key, body)}))
 
     async def send_file(self, path, name: str | None = None, mime: str = "application/octet-stream"):

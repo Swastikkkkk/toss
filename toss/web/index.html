@@ -76,6 +76,15 @@
   }
   #toast.show { transform:translate(-50%,0); opacity:1; }
   footer { color:var(--muted); font-size:13px; margin-top:26px; }
+  .latest { background:var(--panel); border:1px solid var(--accent); border-radius:var(--radius);
+            padding:16px; margin-bottom:12px; display:flex; flex-direction:column; gap:10px; }
+  .latest-head { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--muted); }
+  .latest-dot { width:8px; height:8px; border-radius:50%; background:var(--accent); flex:none; }
+  .latest-text { font-size:16px; line-height:1.45; word-break:break-word; white-space:pre-wrap;
+                 max-height:9.5em; overflow:auto; -webkit-user-select:text; user-select:text; }
+  button.big { width:100%; padding:14px 18px; font-size:16px; }
+  button.done { background:var(--panel); color:var(--accent); border-color:var(--accent); }
+  #send-clipboard { margin-bottom:12px; }
   button.link { background:none; border:0; padding:0; color:var(--muted);
                 font-size:13px; text-decoration:underline; cursor:pointer; }
   button.link:hover { color:var(--ink); }
@@ -117,6 +126,17 @@
       <button id="forget" class="link" type="button">forget</button>
     </div>
 
+    <div id="latest" class="latest" hidden>
+      <div class="latest-head">
+        <span class="latest-dot"></span>
+        <span id="latest-from">copied on your laptop</span>
+      </div>
+      <div id="latest-text" class="latest-text"></div>
+      <button id="latest-copy" class="primary big" type="button">Tap to copy</button>
+    </div>
+
+    <button id="send-clipboard" class="big" type="button">Send my clipboard to the laptop</button>
+
     <form id="send" class="panel">
       <div class="field">
         <label for="compose">Send something back</label>
@@ -129,7 +149,7 @@
       <input type="file" id="file" multiple hidden>
     </form>
 
-    <p id="empty-list">Nothing yet. Hold the hotkey on your laptop, or drop a file anywhere on this page.</p>
+    <p id="empty-list">Copy anything on your laptop and it shows up here. Or hold the hotkey.</p>
     <ul id="items"></ul>
 
     <footer>

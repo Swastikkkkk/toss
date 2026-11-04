@@ -37,6 +37,11 @@ def qr(text: str) -> str | None:
     return "\n".join(out)
 
 
+def preview(text: str) -> str:
+    line = text.strip().splitlines()[0] if text.strip() else "text"
+    return line if len(line) <= 60 else line[:57] + "..."
+
+
 def human(n: int) -> str:
     return f"{n} B" if n < 1024 else f"{n/1024:.0f} KB" if n < 1048576 else f"{n/1048576:.1f} MB"
 
@@ -103,61 +108,115 @@ async def cmd_serve(args):
 
     server = asyncio.create_task(hub.run(host=args.host, port=args.port, ssl_context=ssl_context))
 
+    from . import hotkey
+    want_hotkey = not args.no_hotkey and hotkey.available()
+    want_sync = not args.no_sync
     sender = None
-    if not args.no_hotkey:
-        from . import hotkey
-        if hotkey.available():
-            await asyncio.sleep(0.4)
-            sender = Client(f"{scheme}://127.0.0.1:{args.port}", hub.code, name=args.name,
-                            insecure=scheme == "https")
-            await sender.connect()
-            what = "whatever is selected" if not args.no_grab else "your clipboard"
-            print(f"  Hold {args.key} for {args.hold:.1f}s to send {what}.")
-            print()
 
-            holding_ctrl = args.key.endswith("ctrl")
+    if want_hotkey or want_sync:
+        await asyncio.sleep(0.4)
+        sender = Client(f"{scheme}://127.0.0.1:{args.port}", hub.code, name=args.name,
+                        insecure=scheme == "https")
+        await sender.connect()
 
-            async def trigger():
-                if not args.no_grab:
-                    # copy the selection for you, so there is no copy step
-                    await asyncio.to_thread(clipboard.grab_selection, holding_ctrl)
-                item = clipboard.read()
-                if not item:
-                    print("  clipboard is empty")
-                    return
-                if item["kind"] == "files":
-                    for path in item["paths"]:
-                        p = Path(path)
-                        if not p.is_file():
-                            continue
-                        await sender.send_file(p)
-                        print(f"  sent {p.name} ({human(p.stat().st_size)})")
+    # What we last pushed or received, so a phone's text landing on this
+    # clipboard is not immediately bounced back to the phone.
+    echo = {"seq": None, "text": None}
+
+    if want_hotkey:
+        what = "whatever is selected" if not args.no_grab else "your clipboard"
+        print(f"  Hold {args.key} for {args.hold:.1f}s to send {what}.")
+        holding_ctrl = args.key.endswith("ctrl")
+
+        async def trigger():
+            if not args.no_grab:
+                await asyncio.to_thread(clipboard.grab_selection, holding_ctrl)
+            item = await asyncio.to_thread(clipboard.read)
+            if not item:
+                print("  nothing selected and the clipboard is empty")
+                return
+            if item["kind"] == "files":
+                for path in item["paths"]:
+                    p = Path(path)
+                    if not p.is_file():
+                        continue
+                    await sender.send_file(p)
+                    print(f"  sent {p.name} ({human(p.stat().st_size)})")
+            else:
+                text = item["text"]
+                echo["text"] = text
+                echo["seq"] = clipboard.sequence()
+                await sender.send_text(text)
+                print(f"  sent {preview(text)}")
+
+        asyncio.create_task(hotkey.watch(args.key, args.hold, trigger))
+    elif not args.no_hotkey:
+        print("  Hold-to-send needs Windows. Clipboard sync still works.")
+
+    if want_sync:
+        print("  Clipboard sync is on: anything you copy here appears on your phone.")
+        print("  Copies from password managers are skipped. --no-sync turns it off.")
+
+        async def watch_clipboard():
+            last_seq = clipboard.sequence()
+            last_text = None
+            if last_seq is None:  # not Windows: compare contents instead
+                first = await asyncio.to_thread(clipboard.read)
+                last_text = first["text"] if first and first["kind"] == "text" else None
+            while True:
+                await asyncio.sleep(0.35)
+                seq = clipboard.sequence()
+                if seq is not None:
+                    if seq == last_seq:
+                        continue
+                    last_seq = seq
+                    if seq == echo["seq"]:
+                        continue  # our own write, from the phone
+                item = await asyncio.to_thread(clipboard.read)
+                if not item or item["kind"] != "text":
+                    continue
+                text = item["text"]
+                if seq is None:
+                    if text == last_text:
+                        continue
+                    last_text = text
+                if item.get("sensitive"):
+                    print("  skipped a copy marked private by a password manager")
+                    continue
+                if text == echo["text"] or not text.strip():
+                    continue
+                if len(text) > 200_000:
+                    print("  skipped a very large copy; use the hotkey to send it as a file")
+                    continue
+                echo["text"] = text
+                try:
+                    await sender.send_text(text, sync=True)
+                    print(f"  synced {preview(text)}")
+                except Exception as exc:
+                    print(f"  sync failed: {exc}")
+
+        asyncio.create_task(watch_clipboard())
+
+    if sender:
+        async def receive():
+            async for item in sender.listen():
+                who = item.get("from") or "a device"
+                if item["kind"] == "text":
+                    text = item["data"]
+                    echo["text"] = text
+                    ok = await asyncio.to_thread(clipboard.write, text)
+                    echo["seq"] = clipboard.sequence()
+                    tail = " (on your clipboard, ready to paste)" if ok else ""
+                    print(f"  {who} sent {preview(text)}{tail}")
                 else:
-                    text = item["text"]
-                    await sender.send_text(text)
-                    short = text if len(text) <= 60 else text[:57] + "..."
-                    print(f"  sent {short.splitlines()[0] if text.strip() else 'text'}")
+                    target = Path(args.inbox).expanduser()
+                    target.mkdir(parents=True, exist_ok=True)
+                    dest = unique(target / item["name"])
+                    dest.write_bytes(item["bytes"])
+                    print(f"  {who} sent a file, saved to {dest}")
 
-            asyncio.create_task(hotkey.watch(args.key, args.hold, trigger))
-
-            async def receive():
-                async for item in sender.listen():
-                    if item["kind"] == "text":
-                        ok = clipboard.write(item["data"])
-                        who = item.get("from") or "a device"
-                        print(f"  {who} sent text{' (now on your clipboard)' if ok else ''}: "
-                              f"{item['data'][:60]}")
-                    else:
-                        target = Path(args.inbox).expanduser()
-                        target.mkdir(parents=True, exist_ok=True)
-                        dest = unique(target / item["name"])
-                        dest.write_bytes(item["bytes"])
-                        print(f"  saved {dest}")
-
-            asyncio.create_task(receive())
-        else:
-            print("  Hold-to-send needs Windows. Use `toss send` from another terminal.")
-            print()
+        asyncio.create_task(receive())
+    print()
 
     try:
         await server
@@ -256,6 +315,8 @@ def build_parser():
     s.add_argument("--inbox", default=saved.get("inbox", "~/Downloads"),
                    help="where received files are saved")
     s.add_argument("--no-hotkey", action="store_true", help="hub only, no keyboard watching")
+    s.add_argument("--no-sync", action="store_true",
+                   help="do not push every copy on this machine to your other devices")
     s.add_argument("--no-grab", action="store_true",
                    help="send the clipboard as it is, instead of copying the selection first")
     s.add_argument("--no-qr", action="store_true")

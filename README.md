@@ -91,6 +91,34 @@ Available keys: `right-ctrl`, `left-ctrl`, `right-alt`, `right-shift`,
 `capslock`, `scrolllock`, `f9`. Whatever you pass is remembered, so you only
 pass it once.
 
+## Clipboard sync
+
+On by default. Anything you copy on the laptop appears on your phone straight
+away, and anything you send from the phone lands on the laptop's clipboard,
+ready to paste.
+
+How it lands on the phone depends on the browser, and this part is the
+platform's rule, not toss's:
+
+| on the phone | laptop copy arrives | what you do |
+| --- | --- | --- |
+| Android, Chrome | copied to the phone's clipboard automatically | nothing |
+| iPhone, Safari | pinned at the top of the page | one tap on **Tap to copy** |
+
+Safari refuses any clipboard write that is not inside a tap, for every website.
+Getting around that needs a native iOS app. Going the other way, **Send my
+clipboard to the laptop** reads the phone's clipboard on a tap, and iPhone
+adds its own Paste confirmation on top.
+
+Copies from password managers are never synced. 1Password, Bitwarden,
+KeePass and the rest mark their copies with
+`ExcludeClipboardContentFromMonitorProcessing` and related flags, which is
+the same signal Windows clipboard history honours, and toss skips them. A
+phone's text landing on the laptop is not bounced back to the phone, and the
+same text copied twice is only sent once.
+
+`toss serve --no-sync` turns it off and leaves only the hotkey.
+
 ## Set it up once and forget it
 
 ```bash
@@ -173,9 +201,22 @@ intended shape, not a limitation to fix.
 ## Tests
 
 ```bash
-pytest -q              # 36 tests: crypto, auth, relay, chunking, config, autostart
+pytest -q              # 47 tests: crypto, auth, relay, chunking, TLS, sync, config
 python tests/e2e.py    # 21 checks through a real Chromium
 ```
+
+The Windows clipboard, the hotkey and sync were tested on a real Windows 11
+machine, since none of that runs in CI: reading text another app copied,
+unicode, files copied in Explorer, 200 reads back to back, a password-manager
+copy being skipped, a laptop copy reaching a phone client through the real hub,
+the phone's text landing on the Windows clipboard without echoing back, and a
+held right-ctrl firing exactly once while a quick tap does nothing.
+
+`test_sync.py` also guards the bug that made the clipboard read as empty: on
+64-bit Windows, ctypes assumes every function returns a 32-bit int unless told
+otherwise, and the clipboard returns 64-bit pointers. Undeclared, they get
+truncated, which reads as an empty clipboard or crashes outright. The test
+fails if any pointer-returning call loses its declared type.
 
 The interesting one is the second. The risk in a project like this is that the
 browser's WebCrypto and Python's `cryptography` quietly disagree about key
