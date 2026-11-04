@@ -116,7 +116,7 @@ class Hub:
             # the page only ever talks to the hub it came from
             "Content-Security-Policy":
                 "default-src 'self'; connect-src 'self' ws: wss:; "
-                "img-src 'self' data:; style-src 'self' 'unsafe-inline'",
+                "img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'",
         })
         return Response(status.value, status.phrase, headers, body)
 

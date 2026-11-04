@@ -12,6 +12,11 @@ import asyncio
 import sys
 import time
 
+from . import clipboard
+
+# How long after the key is released a stray Ctrl+C still counts as a copy.
+QUIET_AFTER = 0.8
+
 # Virtual key codes you might want to hold.
 KEYS = {
     "right-ctrl": 0xA3,
@@ -56,6 +61,11 @@ async def watch(key: str, hold: float, on_trigger, poll: float = 0.03):
         is_down = bool(user32.GetAsyncKeyState(vk) & 0x8000)
         now = time.monotonic()
         if is_down:
+            # While the hotkey is held, a Ctrl+C arriving is a copy, ours or
+            # another app's that also reacts to a held Ctrl. It is never you
+            # trying to quit, so toss must not die from it. A Ctrl+C at any
+            # other time still stops toss.
+            clipboard.injecting_until = max(clipboard.injecting_until, now + QUIET_AFTER)
             if down_since is None:
                 down_since = now
             elif not fired and now - down_since >= hold:

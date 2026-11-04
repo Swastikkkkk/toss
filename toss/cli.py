@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import os
+import signal
 import sys
+import time
 from pathlib import Path
 
 from . import autostart, clipboard, config, tls
@@ -35,6 +38,29 @@ def qr(text: str) -> str | None:
             line += "█" if top and bottom else "▀" if top else "▄" if bottom else " "
         out.append(line)
     return "\n".join(out)
+
+
+def debug(message: str) -> None:
+    if os.environ.get("TOSS_DEBUG"):
+        print(f"  debug: {message}", flush=True)
+
+
+SYNC_FILE_LIMIT = 50 * 1024 * 1024  # bigger than this needs a deliberate hotkey press
+
+
+def guess_mime(path: Path) -> str:
+    import mimetypes
+    return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
+
+def image_name() -> str:
+    return time.strftime("clipboard-%Y%m%d-%H%M%S.png")
+
+
+def describe_image(png: bytes) -> str:
+    size = clipboard.png_size(png)
+    dims = f"{size[0]}x{size[1]} " if size else ""
+    return f"an image ({dims}{human(len(png))})"
 
 
 def preview(text: str) -> str:
@@ -108,6 +134,24 @@ async def cmd_serve(args):
 
     server = asyncio.create_task(hub.run(host=args.host, port=args.port, ssl_context=ssl_context))
 
+    # Belt and braces for the copy shortcut: if an interrupt arrives in the
+    # instant we are pressing keys for you, it is ours, not yours, so ignore it.
+    # A real Ctrl+C at any other time still stops toss as normal.
+    previous = signal.getsignal(signal.SIGINT)
+
+    def guarded(signum, frame):
+        now = time.monotonic()
+        debug(f"interrupt at {now:.3f}, copy window open until {clipboard.injecting_until:.3f}")
+        if now < clipboard.injecting_until:
+            print("  ignored a Ctrl+C that arrived while the hotkey was held")
+            return
+        if callable(previous):
+            previous(signum, frame)
+        else:
+            raise KeyboardInterrupt
+
+    signal.signal(signal.SIGINT, guarded)
+
     from . import hotkey
     want_hotkey = not args.no_hotkey and hotkey.available()
     want_sync = not args.no_sync
@@ -121,7 +165,7 @@ async def cmd_serve(args):
 
     # What we last pushed or received, so a phone's text landing on this
     # clipboard is not immediately bounced back to the phone.
-    echo = {"seq": None, "text": None}
+    echo = {"seq": None, "text": None, "image": None, "files": None}
 
     if want_hotkey:
         what = "whatever is selected" if not args.no_grab else "your clipboard"
@@ -129,6 +173,7 @@ async def cmd_serve(args):
         holding_ctrl = args.key.endswith("ctrl")
 
         async def trigger():
+            debug(f"hotkey fired at {time.monotonic():.3f}")
             if not args.no_grab:
                 await asyncio.to_thread(clipboard.grab_selection, holding_ctrl)
             item = await asyncio.to_thread(clipboard.read)
@@ -140,8 +185,14 @@ async def cmd_serve(args):
                     p = Path(path)
                     if not p.is_file():
                         continue
-                    await sender.send_file(p)
+                    await sender.send_file(p, mime=guess_mime(p))
                     print(f"  sent {p.name} ({human(p.stat().st_size)})")
+            elif item["kind"] == "image":
+                png = item["png"]
+                echo["image"] = hashlib.sha256(png).digest()
+                echo["seq"] = clipboard.sequence()
+                await sender.send_file(png, name=image_name(), mime="image/png")
+                print(f"  sent {describe_image(png)}")
             else:
                 text = item["text"]
                 echo["text"] = text
@@ -173,7 +224,47 @@ async def cmd_serve(args):
                     if seq == echo["seq"]:
                         continue  # our own write, from the phone
                 item = await asyncio.to_thread(clipboard.read)
-                if not item or item["kind"] != "text":
+                if not item:
+                    continue
+                if item["kind"] == "image":
+                    if item.get("sensitive"):
+                        print("  skipped an image marked private by another app")
+                        continue
+                    png = item["png"]
+                    digest = hashlib.sha256(png).digest()
+                    if digest == echo["image"]:
+                        continue
+                    if len(png) > 25 * 1024 * 1024:
+                        print("  skipped a very large image; use the hotkey to send it")
+                        continue
+                    echo["image"] = digest
+                    try:
+                        await sender.send_file(png, name=image_name(), mime="image/png", sync=True)
+                        print(f"  synced {describe_image(png)}")
+                    except Exception as exc:
+                        print(f"  sync failed: {exc}")
+                    continue
+                if item["kind"] == "files":
+                    files = [Path(x) for x in item["paths"] if Path(x).is_file()]
+                    if not files:
+                        continue  # a folder, or something that is no longer there
+                    signature = tuple((str(f), f.stat().st_size, f.stat().st_mtime_ns) for f in files)
+                    if signature == echo["files"]:
+                        continue
+                    echo["files"] = signature
+                    for f in files:
+                        size = f.stat().st_size
+                        if size > SYNC_FILE_LIMIT:
+                            print(f"  skipped {f.name} ({human(size)}); over {human(SYNC_FILE_LIMIT)}, "
+                                  "hold the hotkey to send it anyway")
+                            continue
+                        try:
+                            await sender.send_file(f, mime=guess_mime(f), sync=True)
+                            print(f"  synced {f.name} ({human(size)})")
+                        except Exception as exc:
+                            print(f"  sync failed for {f.name}: {exc}")
+                    continue
+                if item["kind"] != "text":
                     continue
                 text = item["text"]
                 if seq is None:
@@ -213,7 +304,21 @@ async def cmd_serve(args):
                     target.mkdir(parents=True, exist_ok=True)
                     dest = unique(target / item["name"])
                     dest.write_bytes(item["bytes"])
-                    print(f"  {who} sent a file, saved to {dest}")
+                    # A copied image becomes a pasteable image; anything else is
+                    # put on the clipboard as a file, so Ctrl+V pastes it
+                    # straight into a folder, an email or a chat.
+                    if item.get("sync") and item["bytes"].startswith(clipboard.PNG_SIGNATURE):
+                        echo["image"] = hashlib.sha256(item["bytes"]).digest()
+                        ok = await asyncio.to_thread(clipboard.write_image, item["bytes"])
+                        what = describe_image(item["bytes"])
+                    else:
+                        st = dest.stat()
+                        echo["files"] = ((str(dest), st.st_size, st.st_mtime_ns),)
+                        ok = await asyncio.to_thread(clipboard.write_files, [dest])
+                        what = f"{dest.name} ({human(st.st_size)})"
+                    echo["seq"] = clipboard.sequence()
+                    tail = ", on your clipboard to paste" if ok else ""
+                    print(f"  {who} sent {what}{tail}. Saved to {dest}")
 
         asyncio.create_task(receive())
     print()

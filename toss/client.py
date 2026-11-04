@@ -70,7 +70,8 @@ class Client:
         body = {"kind": "text", "data": text, "sync": sync}
         await self.ws.send(json.dumps({"t": "item", **seal(self.key, body)}))
 
-    async def send_file(self, path, name: str | None = None, mime: str = "application/octet-stream"):
+    async def send_file(self, path, name: str | None = None, mime: str = "application/octet-stream",
+                        sync: bool = False):
         data = path if isinstance(path, (bytes, bytearray)) else open(path, "rb").read()
         name = name or (getattr(path, "name", None) or str(path).split("/")[-1].split("\\")[-1])
         ident = b64(os.urandom(9))
@@ -79,7 +80,7 @@ class Client:
             part = bytes(data[i * CHUNK:(i + 1) * CHUNK])
             await self.ws.send(json.dumps({
                 "t": "chunk", "id": ident, "i": i, "n": total,
-                "name": name, "mime": mime, **seal(self.key, part),
+                "name": name, "mime": mime, "sync": sync, **seal(self.key, part),
             }))
         return total
 
@@ -102,5 +103,6 @@ class Client:
                     yield {
                         "kind": "file", "name": msg.get("name", "file"),
                         "mime": msg.get("mime"), "bytes": body,
+                        "sync": bool(msg.get("sync")),
                         "from": (msg.get("from") or {}).get("name"),
                     }

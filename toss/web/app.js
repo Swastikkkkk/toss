@@ -133,7 +133,10 @@ async function handle(msg) {
       const joined = new Uint8Array(total);
       let at = 0;
       for (const p of entry.parts) { joined.set(p, at); at += p.length; }
-      addItem({ kind: "file", name: msg.name, mime: msg.mime, bytes: joined, from: msg.from && msg.from.name });
+      const from = msg.from && msg.from.name;
+      if (msg.sync && /^image\//.test(msg.mime || "")) onSyncImage(joined, msg.mime, from);
+      else if (msg.sync) onSyncFile(joined, msg.name, msg.mime, from);
+      else addItem({ kind: "file", name: msg.name, mime: msg.mime, bytes: joined, from });
     }
   }
 }
@@ -146,14 +149,14 @@ async function sendText(text) {
   addItem({ kind: "text", data: text, mine: true });
 }
 
-async function sendFile(file) {
+async function sendFile(file, sync = false) {
   const id = bytesToB64(crypto.getRandomValues(new Uint8Array(9)));
   const buf = new Uint8Array(await file.arrayBuffer());
   const n = Math.max(1, Math.ceil(buf.length / CHUNK));
   for (let i = 0; i < n; i++) {
     const env = await seal(state.key, buf.subarray(i * CHUNK, (i + 1) * CHUNK));
     state.ws.send(JSON.stringify({
-      t: "chunk", id, i, n, name: file.name, mime: file.type || "application/octet-stream", ...env,
+      t: "chunk", id, i, n, name: file.name, mime: file.type || "application/octet-stream", sync, ...env,
     }));
     progress(id, i + 1, n, file.name);
   }
@@ -168,43 +171,110 @@ const items = [];
    the clipboard on its own, so try that first. Safari on iPhone refuses any
    clipboard write that is not inside a tap, so there the latest clip stays
    pinned at the top behind one big button. */
-let latestClip = "";
+let latestClip = null;   // { type: "text", text } or { type: "image", blob, mime }
 
-async function onSync(text, from) {
-  latestClip = text;
+function showLatest(from) {
   const card = $("#latest");
-  if (!card) return;
   card.hidden = false;
-  $("#latest-text").textContent = text.length > 400 ? text.slice(0, 400) + "..." : text;
   $("#latest-from").textContent = from ? `copied on ${from}` : "copied on your laptop";
   const btn = $("#latest-copy");
+  btn.hidden = false;
   btn.textContent = "Tap to copy";
   btn.classList.remove("done");
+  const saveBtn = $("#latest-save");
+  saveBtn.textContent = "Save image";
+  saveBtn.classList.remove("primary");
+}
 
-  let auto = false;
-  if (document.hasFocus() && navigator.clipboard && navigator.clipboard.writeText) {
-    try { await navigator.clipboard.writeText(text); auto = true; } catch { auto = false; }
-  }
-  if (auto) {
-    btn.textContent = "On your clipboard";
-    btn.classList.add("done");
-    toast("Copied to this device");
-  } else {
-    toast("New clip from your laptop");
-  }
+async function autoCopied() {
+  const btn = $("#latest-copy");
+  btn.textContent = "On your clipboard";
+  btn.classList.add("done");
+  toast("Copied to this device");
+}
+
+async function onSync(text, from) {
+  latestClip = { type: "text", text };
+  showLatest(from);
+  $("#latest-img").hidden = true;
+  $("#latest-save").hidden = true;
+  const box = $("#latest-text");
+  box.hidden = false;
+  box.textContent = text.length > 400 ? text.slice(0, 400) + "..." : text;
+  if (await tryWrite()) autoCopied();
+  else toast("New clip from your laptop");
   if (navigator.vibrate) navigator.vibrate(40);
+}
+
+function onSyncImage(bytes, mime, from) {
+  const blob = new Blob([bytes], { type: mime || "image/png" });
+  latestClip = { type: "image", blob, mime: blob.type };
+  showLatest(from);
+  $("#latest-text").hidden = true;
+  const img = $("#latest-img");
+  if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+  img.dataset.url = URL.createObjectURL(blob);
+  img.src = img.dataset.url;
+  img.hidden = false;
+  $("#latest-save").hidden = false;
+  tryWrite().then((ok) => {
+    if (ok) autoCopied();
+    else toast("New image from your laptop");
+  });
+  if (navigator.vibrate) navigator.vibrate(40);
+}
+
+/* A document or any other file copied on the laptop. A phone clipboard cannot
+   hold a PDF, so this one is about getting it saved or shared in one tap. */
+function onSyncFile(bytes, name, mime, from) {
+  const blob = new Blob([bytes], { type: mime || "application/octet-stream" });
+  latestClip = { type: "file", blob, mime: blob.type, name };
+  showLatest(from);
+  $("#latest-img").hidden = true;
+  const box = $("#latest-text");
+  box.hidden = false;
+  box.textContent = `${name}  \u00b7  ${size(bytes.length)}`;
+  $("#latest-copy").hidden = true;
+  const saveBtn = $("#latest-save");
+  saveBtn.hidden = false;
+  saveBtn.textContent = "Save or share";
+  saveBtn.classList.add("primary");
+  addItem({ kind: "file", name, mime: blob.type, bytes, from, quiet: true });
+  toast(`${name} from your laptop`);
+  if (navigator.vibrate) navigator.vibrate(40);
+}
+
+/* Chrome and Android let a focused page write the clipboard on its own.
+   Safari only allows it inside a tap, so there this fails and the button waits. */
+async function tryWrite() {
+  if (!latestClip || !document.hasFocus() || !navigator.clipboard) return false;
+  try {
+    await writeClip();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function writeClip() {
+  if (latestClip.type === "text") return navigator.clipboard.writeText(latestClip.text);
+  if (!window.ClipboardItem || !navigator.clipboard.write) return Promise.reject(new Error("no image clipboard"));
+  return navigator.clipboard.write([new ClipboardItem({ [latestClip.mime]: latestClip.blob })]);
 }
 
 async function copyLatest() {
   if (!latestClip) return;
   const btn = $("#latest-copy");
   try {
-    await navigator.clipboard.writeText(latestClip);
+    await writeClip();
     btn.textContent = "On your clipboard";
     btn.classList.add("done");
     toast("Copied");
   } catch {
-    // last resort: select it so the native Copy menu is one tap away
+    if (latestClip.type === "image") {
+      toast("Long-press the image and tap Copy");
+      return;
+    }
     const range = document.createRange();
     range.selectNodeContents($("#latest-text"));
     const sel = window.getSelection();
@@ -214,10 +284,48 @@ async function copyLatest() {
   }
 }
 
+/* On iPhone the share sheet is the way to Save Image to Photos. */
+async function saveLatest() {
+  if (!latestClip || (latestClip.type !== "image" && latestClip.type !== "file")) return;
+  const name = latestClip.name || `toss-${Date.now()}.png`;
+  const file = new File([latestClip.blob], name, { type: latestClip.mime });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url; a.download = file.name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
 /* The other direction. Reading the clipboard always needs a tap, and iPhone
    shows its own Paste confirmation on top of that, which is Apple's rule. */
 async function sendMyClipboard() {
   try {
+    // one read() covers both, so iPhone only shows its Paste prompt once
+    if (navigator.clipboard && navigator.clipboard.read) {
+      const items = await navigator.clipboard.read();
+      for (const it of items) {
+        const type = it.types.find((t) => t.startsWith("image/"));
+        if (type) {
+          const blob = await it.getType(type);
+          await sendFile(new File([blob], `phone-clipboard-${Date.now()}.png`, { type }), true);
+          toast("Image sent to your laptop's clipboard");
+          return;
+        }
+      }
+      for (const it of items) {
+        if (it.types.includes("text/plain")) {
+          const text = await (await it.getType("text/plain")).text();
+          if (text.trim()) {
+            await sendText(text);
+            toast("Sent to your laptop's clipboard");
+            return;
+          }
+        }
+      }
+      return toast("Your clipboard is empty");
+    }
     const text = await navigator.clipboard.readText();
     if (!text || !text.trim()) return toast("Your clipboard is empty");
     await sendText(text);
@@ -231,7 +339,7 @@ async function sendMyClipboard() {
 function addItem(item) {
   items.unshift(item);
   renderItems();
-  if (!item.mine) {
+  if (!item.mine && !item.quiet) {
     toast(item.kind === "file" ? `Got ${item.name}` : "Got something");
     if (navigator.vibrate) navigator.vibrate(60);
   }
@@ -248,8 +356,11 @@ function renderItems() {
   $("#items").innerHTML = items.map((it, i) => {
     const who = it.mine ? "you" : (it.from || "them");
     if (it.kind === "file") {
+      const isImage = /^image\//.test(it.mime || "");
+      if (isImage && !it.url) it.url = URL.createObjectURL(new Blob([it.bytes], { type: it.mime }));
       return `<li class="${it.mine ? "mine" : ""}">
-        <div class="meta">${esc(who)} &middot; file</div>
+        <div class="meta">${esc(who)} &middot; ${isImage ? "image" : "file"}</div>
+        ${isImage ? `<img class="thumb" src="${it.url}" alt="${esc(it.name)}">` : ""}
         <div class="body"><strong>${esc(it.name)}</strong> <span class="dim">${size(it.bytes.length)}</span></div>
         <div class="acts"><button data-save="${i}">Save</button></div></li>`;
     }
@@ -329,11 +440,15 @@ function forget(message) {
   $("#code").value = "";
 }
 
-function save(item) {
-  const url = URL.createObjectURL(new Blob([item.bytes], { type: item.mime || "application/octet-stream" }));
+async function save(item) {
+  const file = new File([item.bytes], item.name, { type: item.mime || "application/octet-stream" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  const url = URL.createObjectURL(file);
   const a = document.createElement("a");
   a.href = url; a.download = item.name; a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 /* ---------- wiring ---------- */
@@ -437,6 +552,7 @@ function init() {
   });
 
   $("#latest-copy").addEventListener("click", copyLatest);
+  $("#latest-save").addEventListener("click", saveLatest);
   $("#send-clipboard").addEventListener("click", sendMyClipboard);
 
   $("#send").addEventListener("submit", async (e) => {

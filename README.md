@@ -73,8 +73,15 @@ phones cannot join when you use it.
 
 **To send:** highlight something and hold `right-ctrl` for 0.4 seconds. It
 copies the selection for you first, so there is no copy-then-send dance. Files
-you copied in Explorer go too. If you would rather it only ever read what is
+and images you copied go too. If you would rather it only ever read what is
 already on your clipboard, use `--no-grab`.
+
+It copies by pressing **Ctrl+Insert**, not Ctrl+C. Both mean copy almost
+everywhere on Windows, but in a terminal Ctrl+C means stop the program, so with
+toss's own terminal focused it used to shut itself down. And while the hotkey
+is held, toss ignores any Ctrl+C that arrives, because at that moment it is a
+copy, never you quitting: other apps that react to a held Ctrl, or an old copy
+of toss still running, send one too. Ctrl+C at any other time stops toss.
 
 **To send back:** type in the box and press enter, or paste anywhere on the
 page, or drop files on it. Text lands on your laptop clipboard ready to paste,
@@ -93,31 +100,50 @@ pass it once.
 
 ## Clipboard sync
 
-On by default. Anything you copy on the laptop appears on your phone straight
-away, and anything you send from the phone lands on the laptop's clipboard,
-ready to paste.
+On by default, and it carries text, images and files.
 
-How it lands on the phone depends on the browser, and this part is the
+| you copy on the laptop | it arrives on the phone as |
+| --- | --- |
+| text | pinned at the top, ready to paste |
+| an image, a screenshot, "Copy image" in a browser | the picture, pinned, ready to paste |
+| a file in Explorer, a PDF, a Word doc, anything | the file, with Save or share |
+
+Going the other way, whatever you send from the phone lands on the laptop's
+clipboard: text pastes as text, an image pastes as an image, and a file pastes
+as a file into a folder, an email or a chat. Files are also saved to Downloads.
+
+How a copy lands on the phone depends on the browser, and this part is the
 platform's rule, not toss's:
 
-| on the phone | laptop copy arrives | what you do |
+| on the phone | text and images | files |
 | --- | --- | --- |
-| Android, Chrome | copied to the phone's clipboard automatically | nothing |
-| iPhone, Safari | pinned at the top of the page | one tap on **Tap to copy** |
+| Android, Chrome | copied to the phone's clipboard automatically | one tap to save or share |
+| iPhone, Safari | one tap on **Tap to copy** | one tap to save or share |
 
-Safari refuses any clipboard write that is not inside a tap, for every website.
-Getting around that needs a native iOS app. Going the other way, **Send my
-clipboard to the laptop** reads the phone's clipboard on a tap, and iPhone
-adds its own Paste confirmation on top.
+Safari refuses any clipboard write that is not inside a tap, for every website,
+and no phone clipboard can hold a PDF, so documents go through the share sheet:
+Save to Files, AirDrop, WhatsApp. **Send my clipboard to the laptop** reads the
+phone's clipboard on a tap, text or image, and iPhone adds its own Paste prompt.
 
-Copies from password managers are never synced. 1Password, Bitwarden,
-KeePass and the rest mark their copies with
-`ExcludeClipboardContentFromMonitorProcessing` and related flags, which is
-the same signal Windows clipboard history honours, and toss skips them. A
-phone's text landing on the laptop is not bounced back to the phone, and the
-same text copied twice is only sent once.
+Copies from password managers are never synced. 1Password, Bitwarden, KeePass
+and the rest mark their copies with `ExcludeClipboardContentFromMonitorProcessing`
+and related flags, the same signal Windows clipboard history honours. Nothing
+echoes back, the same copy is only sent once, and copied files over 50 MB are
+skipped by sync (hold the hotkey to send one deliberately).
 
 `toss serve --no-sync` turns it off and leaves only the hotkey.
+
+### How images are read
+
+Windows hands copied images over as a device-independent bitmap, sometimes
+alongside a PNG. toss uses the PNG when an app provides one and otherwise
+converts the bitmap itself, in plain Python with no imaging library.
+
+Windows 11 has a quirk here, found on a real machine: when it generates the
+V5 bitmap format it stores the colour masks inside the header and then repeats
+them after it, and when it generates the older format from that, it makes the
+same mistake itself and shifts every pixel. Reading from the wrong offset moves
+the picture sideways. `test_image.py` recreates both layouts byte for byte.
 
 ## Set it up once and forget it
 
@@ -201,16 +227,25 @@ intended shape, not a limitation to fix.
 ## Tests
 
 ```bash
-pytest -q              # 47 tests: crypto, auth, relay, chunking, TLS, sync, config
+pytest -q              # 65 tests: crypto, auth, relay, chunking, TLS, sync, images, config
 python tests/e2e.py    # 21 checks through a real Chromium
 ```
 
 The Windows clipboard, the hotkey and sync were tested on a real Windows 11
-machine, since none of that runs in CI: reading text another app copied,
-unicode, files copied in Explorer, 200 reads back to back, a password-manager
-copy being skipped, a laptop copy reaching a phone client through the real hub,
-the phone's text landing on the Windows clipboard without echoing back, and a
-held right-ctrl firing exactly once while a quick tap does nothing.
+machine, since none of that runs in CI:
+
+- text, unicode, 200 reads back to back, a password-manager copy being skipped
+- images copied by an app, converted to PNG and checked pixel by pixel by
+  Windows' own decoder, for both bitmap formats at 24 and 32 bit
+- a browser-style PNG copy passed through untouched, and text winning when an
+  app also puts a picture of it there
+- through the real hub over https: an image, a PDF and text reaching a phone
+  client, a Word file and an image from the phone landing on the Windows
+  clipboard ready to paste, with nothing echoing back
+- a keyboard hook confirming toss presses Ctrl+Insert and never C
+- a held right-ctrl firing exactly once while a quick tap does nothing, and a
+  real console Ctrl+C mid-hold being ignored while one at any other time stops
+  toss within milliseconds
 
 `test_sync.py` also guards the bug that made the clipboard read as empty: on
 64-bit Windows, ctypes assumes every function returns a 32-bit int unless told

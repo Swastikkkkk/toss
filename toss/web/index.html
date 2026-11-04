@@ -85,6 +85,10 @@
   button.big { width:100%; padding:14px 18px; font-size:16px; }
   button.done { background:var(--panel); color:var(--accent); border-color:var(--accent); }
   #send-clipboard { margin-bottom:12px; }
+  .latest-img, .thumb { display:block; max-width:100%; max-height:340px; width:auto; border-radius:10px;
+                        border:1px solid var(--line); background:var(--bg);
+                        -webkit-touch-callout:default; -webkit-user-select:auto; user-select:auto; }
+  .thumb { max-height:220px; margin-top:6px; }
   button.link { background:none; border:0; padding:0; color:var(--muted);
                 font-size:13px; text-decoration:underline; cursor:pointer; }
   button.link:hover { color:var(--ink); }
@@ -132,7 +136,9 @@
         <span id="latest-from">copied on your laptop</span>
       </div>
       <div id="latest-text" class="latest-text"></div>
+      <img id="latest-img" class="latest-img" alt="Image copied on your laptop" hidden>
       <button id="latest-copy" class="primary big" type="button">Tap to copy</button>
+      <button id="latest-save" class="big" type="button" hidden>Save image</button>
     </div>
 
     <button id="send-clipboard" class="big" type="button">Send my clipboard to the laptop</button>

@@ -84,3 +84,30 @@ def test_password_manager_formats_are_honoured():
     for fmt in ("ExcludeClipboardContentFromMonitorProcessing", "CanIncludeInClipboardHistory",
                 "CanUploadToCloudClipboard"):
         assert fmt in src, f"copies flagged {fmt} must not be synced"
+
+
+async def test_a_synced_image_arrives_marked_and_intact(hub):
+    from toss.clipboard import png_encode
+    png = png_encode(64, 48, bytes([200, 30, 30, 255]) * 64 * 48, 4)
+    async with Client(hub.url, hub.code, name="laptop") as laptop, \
+               Client(hub.url, hub.code, name="phone") as phone:
+        got = asyncio.create_task(anext(phone.listen()))
+        await asyncio.sleep(0.1)
+        await laptop.send_file(png, name="clipboard.png", mime="image/png", sync=True)
+        item = await asyncio.wait_for(got, 10)
+    assert item["kind"] == "file" and item["mime"] == "image/png"
+    assert item["sync"] is True, "the phone pins synced images, so the flag must survive chunking"
+    assert item["bytes"] == png
+
+
+async def test_a_large_synced_image_survives_many_chunks(hub):
+    import os
+    blob = b"\x89PNG\r\n\x1a\n" + os.urandom(900_000)
+    async with Client(hub.url, hub.code, name="laptop") as laptop, \
+               Client(hub.url, hub.code, name="phone") as phone:
+        got = asyncio.create_task(anext(phone.listen()))
+        await asyncio.sleep(0.1)
+        chunks = await laptop.send_file(blob, name="big.png", mime="image/png", sync=True)
+        item = await asyncio.wait_for(got, 20)
+    assert chunks > 3
+    assert item["bytes"] == blob and item["sync"] is True

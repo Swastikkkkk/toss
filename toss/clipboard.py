@@ -11,13 +11,23 @@ from __future__ import annotations
 
 import functools
 import shutil
+import struct
 import subprocess
 import sys
 import time
+import zlib
 
+CF_DIB = 8
 CF_UNICODETEXT = 13
 CF_HDROP = 15
+CF_DIBV5 = 17
 GMEM_MOVEABLE = 0x0002
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+# Until this moment, an interrupt is treated as a stray copy rather than a
+# request to quit. The hotkey keeps it open while the key is held, and
+# grab_selection extends it while it presses Ctrl+Insert. cli.py reads it.
+injecting_until = 0.0
 
 # Formats password managers set to say "do not sync or record this". Windows'
 # own clipboard history and cloud clipboard honour them, so we do too.
@@ -48,6 +58,7 @@ def _win():
     sig(u.RegisterClipboardFormatW, [w.LPCWSTR], w.UINT)
     sig(u.keybd_event, [w.BYTE, w.BYTE, w.DWORD, ctypes.c_size_t], None)
     sig(u.GetAsyncKeyState, [ctypes.c_int], ctypes.c_short)
+    sig(u.MapVirtualKeyW, [w.UINT, w.UINT], w.UINT)
     sig(k.GlobalLock, [w.HGLOBAL], w.LPVOID)
     sig(k.GlobalUnlock, [w.HGLOBAL], w.BOOL)
     sig(k.GlobalAlloc, [w.UINT, ctypes.c_size_t], w.HGLOBAL)
@@ -71,6 +82,108 @@ class _Open:
 
     def __exit__(self, *exc):
         _win()[1].CloseClipboard()
+
+
+def _png_chunk(tag: bytes, data: bytes) -> bytes:
+    return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+
+
+def png_encode(width: int, height: int, pixels: bytes, channels: int) -> bytes:
+    """Encode top-down, unpadded RGB (3) or RGBA (4) pixels as a PNG."""
+    row = width * channels
+    raw = b"".join(b"\x00" + pixels[y * row:(y + 1) * row] for y in range(height))
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 6 if channels == 4 else 2, 0, 0, 0)
+    return (PNG_SIGNATURE + _png_chunk(b"IHDR", ihdr)
+            + _png_chunk(b"IDAT", zlib.compress(raw, 6)) + _png_chunk(b"IEND", b""))
+
+
+def png_size(png: bytes):
+    if png[:8] != PNG_SIGNATURE or len(png) < 24:
+        return None
+    return struct.unpack(">II", png[16:24])
+
+
+def dib_to_png(dib: bytes):
+    """A Windows device-independent bitmap (what screenshots and most image
+    copies put on the clipboard) as a PNG. 24 and 32 bit only, which is what
+    every modern app produces. Returns None for anything it cannot read."""
+    if len(dib) < 40:
+        return None
+    (bi_size, width, height, _planes, bpp, compression,
+     _img, _xp, _yp, clr_used, _ci) = struct.unpack_from("<IiiHHIIiiII", dib, 0)
+    if width <= 0 or height == 0 or bpp not in (24, 32) or compression not in (0, 3):
+        return None
+    if compression == 3:  # BI_BITFIELDS: only the standard BGRA layout
+        masks = struct.unpack_from("<III", dib, 40)
+        if masks != (0x00FF0000, 0x0000FF00, 0x000000FF):
+            return None
+    h = abs(height)
+    stride = ((width * bpp + 31) // 32) * 4
+    offset = bi_size
+    if compression == 3:
+        masks = dib[40:52]
+        if bi_size == 40:
+            offset += 12  # a plain header is followed by its three colour masks
+        if dib[offset:offset + 12] == masks:
+            # Windows quirk, seen on a real Windows 11 machine. When it
+            # synthesises CF_DIBV5 it keeps the masks in the header and repeats
+            # them after it. When it then synthesises CF_DIB from that, it makes
+            # the same mistake itself: the pixels start 12 bytes late and the
+            # last 12 are cut off. Either way the masks are not image data.
+            offset += 12
+    offset += clr_used * 4
+    need = offset + stride * h
+    if len(dib) < need:
+        if compression == 3 and need - len(dib) <= 12:
+            dib = dib + b"\x00" * (need - len(dib))  # three pixels Windows already lost
+        else:
+            return None
+    data = dib[offset:offset + stride * h]
+    bytespp = bpp // 8
+    row = width * bytespp
+    order = range(h) if height < 0 else range(h - 1, -1, -1)  # bottom-up unless negative
+    buf = b"".join(data[y * stride:y * stride + row] for y in order)
+
+    out = bytearray(len(buf))
+    if bpp == 32:
+        out[0::4], out[1::4], out[2::4] = buf[2::4], buf[1::4], buf[0::4]
+        alpha = buf[3::4]
+        # plain 32-bit bitmaps leave alpha at zero, which would mean fully clear
+        out[3::4] = alpha if alpha.strip(b"\x00") else b"\xff" * (len(buf) // 4)
+        return png_encode(width, h, bytes(out), 4)
+    out[0::3], out[1::3], out[2::3] = buf[2::3], buf[1::3], buf[0::3]
+    return png_encode(width, h, bytes(out), 3)
+
+
+def _global_bytes(handle):
+    ctypes, _, k, _ = _win()
+    if not handle:
+        return None
+    ptr = k.GlobalLock(handle)
+    if not ptr:
+        return None
+    try:
+        return ctypes.string_at(ptr, k.GlobalSize(handle))
+    finally:
+        k.GlobalUnlock(handle)
+
+
+def _windows_image():
+    """The clipboard image as PNG bytes, or None. Prefers a real PNG if an app
+    put one there, and falls back to converting the bitmap."""
+    _, u, _, _ = _win()
+    png_fmt = u.RegisterClipboardFormatW("PNG")
+    if png_fmt and u.IsClipboardFormatAvailable(png_fmt):
+        data = _global_bytes(u.GetClipboardData(png_fmt))
+        if data and data.startswith(PNG_SIGNATURE):
+            return data
+    for fmt in (CF_DIBV5, CF_DIB):  # Windows synthesises these from CF_BITMAP
+        if u.IsClipboardFormatAvailable(fmt):
+            data = _global_bytes(u.GetClipboardData(fmt))
+            png = dib_to_png(data) if data else None
+            if png:
+                return png
+    return None
 
 
 def _windows_dword_format(name: str):
@@ -137,7 +250,106 @@ def _windows_read():
                     text = text.split("\x00", 1)[0]
                     if text:
                         return {"kind": "text", "text": text, "sensitive": sensitive}
+
+        # Text wins when both exist: Excel and Word also put a picture of what
+        # you copied there, and you wanted the text.
+        png = _windows_image()
+        if png:
+            return {"kind": "image", "png": png, "sensitive": sensitive}
     return None
+
+
+def _windows_write_png(png: bytes) -> bool:
+    """Put a PNG on the clipboard under the registered PNG format, which is
+    what browsers, Office, Teams, Discord and most chat apps paste from."""
+    ctypes, u, k, _ = _win()
+    fmt = u.RegisterClipboardFormatW("PNG")
+    if not fmt:
+        return False
+    handle = k.GlobalAlloc(GMEM_MOVEABLE, len(png))
+    if not handle:
+        return False
+    ptr = k.GlobalLock(handle)
+    if not ptr:
+        k.GlobalFree(handle)
+        return False
+    ctypes.memmove(ptr, png, len(png))
+    k.GlobalUnlock(handle)
+    try:
+        with _Open():
+            u.EmptyClipboard()
+            if not u.SetClipboardData(fmt, handle):
+                k.GlobalFree(handle)
+                return False
+            return True
+    except OSError:
+        k.GlobalFree(handle)
+        return False
+
+
+def _windows_write_files(paths) -> bool:
+    """Put files on the clipboard the way Explorer does, so Ctrl+V pastes them
+    into a folder, an email, WhatsApp or anything else that takes files."""
+    ctypes, u, k, _ = _win()
+    paths = [str(p) for p in paths]
+    # DROPFILES: offset to the list, a point, fNC, fWide; then NUL-separated
+    # UTF-16 paths ending in a double NUL
+    header = struct.pack("<IiiII", 20, 0, 0, 0, 1)
+    body = ("\x00".join(paths) + "\x00\x00").encode("utf-16-le")
+    data = header + body
+    drop_effect_fmt = u.RegisterClipboardFormatW("Preferred DropEffect")
+
+    def alloc(raw):
+        h = k.GlobalAlloc(GMEM_MOVEABLE, len(raw))
+        if not h:
+            return None
+        ptr = k.GlobalLock(h)
+        if not ptr:
+            k.GlobalFree(h)
+            return None
+        ctypes.memmove(ptr, raw, len(raw))
+        k.GlobalUnlock(h)
+        return h
+
+    files_handle = alloc(data)
+    effect_handle = alloc(struct.pack("<I", 1))  # DROPEFFECT_COPY, so pasting copies rather than moves
+    if not files_handle:
+        return False
+    try:
+        with _Open():
+            u.EmptyClipboard()
+            if not u.SetClipboardData(CF_HDROP, files_handle):
+                k.GlobalFree(files_handle)
+                if effect_handle:
+                    k.GlobalFree(effect_handle)
+                return False
+            if effect_handle and drop_effect_fmt:
+                if not u.SetClipboardData(drop_effect_fmt, effect_handle):
+                    k.GlobalFree(effect_handle)
+            return True
+    except OSError:
+        k.GlobalFree(files_handle)
+        if effect_handle:
+            k.GlobalFree(effect_handle)
+        return False
+
+
+def write_files(paths) -> bool:
+    if sys.platform == "win32" and paths:
+        try:
+            return _windows_write_files(paths)
+        except OSError:
+            return False
+    return False
+
+
+def write_image(png: bytes) -> bool:
+    if sys.platform == "win32" and png.startswith(PNG_SIGNATURE):
+        try:
+            return _windows_write_png(png)
+        except OSError:
+            return False
+    return False
 
 
 def _windows_write(text: str) -> bool:
@@ -176,7 +388,8 @@ def _run(cmd, text=None):
 
 
 def read():
-    """{'kind':'text','text':..} or {'kind':'files','paths':[..]} or None.
+    """{'kind':'text','text':..}, {'kind':'files','paths':[..]},
+    {'kind':'image','png':bytes} or None.
     Either may carry 'sensitive': True when a password manager asked us not to sync it."""
     if sys.platform == "win32":
         try:
@@ -219,22 +432,28 @@ def sequence() -> int | None:
 
 
 def grab_selection(ctrl_already_down: bool = False) -> bool:
-    """Press Ctrl+C in whatever window has focus, so you can send what is
-    highlighted without copying it first. When the trigger key you are holding
-    is already a Ctrl, only `c` is sent, because Ctrl is down as far as the OS
-    is concerned."""
+    """Copy whatever is highlighted in the focused window, so there is no copy
+    step before sending.
+
+    It presses Ctrl+Insert, not Ctrl+C. Both mean copy almost everywhere on
+    Windows, but in a terminal Ctrl+C means "stop the program", so pressing it
+    while toss's own terminal was focused made toss shut itself down.
+    Ctrl+Insert copies in terminals too and never interrupts anything."""
+    global injecting_until
     if sys.platform != "win32":
         return False
     try:
         _, u, _, _ = _win()
-        VK_CONTROL, VK_C, KEYUP = 0x11, 0x43, 0x0002
+        VK_CONTROL, VK_INSERT, KEYUP, EXTENDED = 0x11, 0x2D, 0x0002, 0x0001
+        scan = u.MapVirtualKeyW(VK_INSERT, 0)
+        injecting_until = max(injecting_until, time.monotonic() + 0.8)
         before = sequence()
         if not ctrl_already_down:
-            u.keybd_event(VK_CONTROL, 0, 0, 0)
-        u.keybd_event(VK_C, 0, 0, 0)
-        u.keybd_event(VK_C, 0, KEYUP, 0)
+            u.keybd_event(VK_CONTROL, u.MapVirtualKeyW(VK_CONTROL, 0), 0, 0)
+        u.keybd_event(VK_INSERT, scan, EXTENDED, 0)
+        u.keybd_event(VK_INSERT, scan, EXTENDED | KEYUP, 0)
         if not ctrl_already_down:
-            u.keybd_event(VK_CONTROL, 0, KEYUP, 0)
+            u.keybd_event(VK_CONTROL, u.MapVirtualKeyW(VK_CONTROL, 0), KEYUP, 0)
         for _ in range(25):  # the focused app needs a beat to service the copy
             time.sleep(0.015)
             if sequence() != before:
