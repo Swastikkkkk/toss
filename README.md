@@ -39,13 +39,14 @@ which is the only way this works on a phone your friend is holding.
 ## Install
 
 ```bash
-pip install -e ".[qr]"
+pip install "toss[qr] @ git+https://github.com/Swastikkkkk/toss"
 ```
 
 Python 3.10+. Two real dependencies: `websockets` and `cryptography`. The QR is
 optional, and without it you just read the four words out loud.
 
-On Windows, double click `start.bat`.
+On Windows, double click `start.bat`. To hack on it, clone and
+`pip install -e ".[qr]"` instead.
 
 ## Use
 

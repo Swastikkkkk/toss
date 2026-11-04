@@ -64,5 +64,6 @@ docs.mkdir(exist_ok=True)
 for folder in ("css", "js"):
     shutil.rmtree(docs / folder, ignore_errors=True)
     shutil.copytree(root / folder, docs / folder)
-shutil.copy(root / "screenshot-phone.png", docs / "screenshot-phone.png")
+for asset in ("screenshot-phone.png", "shot-terminal.png"):
+    shutil.copy(root / asset, docs / asset)
 print(f"docs/index.html  {len(out) / 1024:.1f} KB  +  css/ js/ + assets")

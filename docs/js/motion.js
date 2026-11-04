@@ -33,30 +33,19 @@ export function initMotion({ gsap, ScrollTrigger, reduced }) {
   if (!ScrollTrigger) return;
   gsap.registerPlugin(ScrollTrigger);
 
-  /* Only animate what is below the fold at load. Anything already on screen
-     stays exactly as the HTML left it, so the first frame is complete and no
-     element is ever sitting at zero opacity waiting to be scrolled to. */
-  const belowFold = (el) => el.getBoundingClientRect().top > window.innerHeight * 0.92;
-
+  /* Scroll reveals move things, they never fade them. Nothing on this page is
+     ever at zero opacity, so a reader who lands mid-page, a screenshot, or a
+     browser that blocks the script all still see a complete page. */
   const reveal = (el, vars, start) => {
-    if (!belowFold(el)) return;
-    gsap.from(el, {
-      ...vars,
-      scrollTrigger: { trigger: el, start, once: true },
-    });
+    if (el.getBoundingClientRect().top <= window.innerHeight * 0.92) return;
+    gsap.from(el, { ...vars, scrollTrigger: { trigger: el, start, once: true } });
   };
 
   document.querySelectorAll("[data-reveal]").forEach((el) => {
-    reveal(el, { opacity: 0, y: 18, duration: 0.55, ease: "power3.out" }, "top 88%");
+    reveal(el, { y: 16, duration: 0.5, ease: "power3.out" }, "top 90%");
   });
 
   document.querySelectorAll(".steps > li").forEach((el, i) => {
-    reveal(el, {
-      opacity: 0,
-      x: -10,
-      duration: 0.5,
-      delay: (i % 4) * 0.05,
-      ease: "power2.out",
-    }, "top 90%");
+    reveal(el, { x: -10, duration: 0.45, delay: (i % 4) * 0.05, ease: "power2.out" }, "top 92%");
   });
 }

@@ -10,10 +10,8 @@
     <a class="brand" href="#top">toss<b>.</b></a>
     <nav class="navlinks">
       <a href="#setup">Setup</a>
-      <a href="#use" class="hide-xs">Daily use</a>
-      <a href="#code" class="hide-sm">The code</a>
-      <a href="#limits" class="hide-sm">Limits</a>
-      <a href="#reference">Commands</a>
+      <a href="#commands">Commands</a>
+      <a href="https://github.com/Swastikkkkk/toss">GitHub</a>
     </nav>
   </div>
 </header>
@@ -27,10 +25,7 @@
         <p class="lede" id="hero-lede">
           Highlight something. Hold a key. It is <strong>on your phone</strong> before you let go.
         </p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="#setup" style="border-bottom:1px solid var(--accent)">Set it up</a>
-          <a class="btn" href="#limits" style="border-bottom:1px solid var(--line-strong)">What breaks</a>
-        </div>
+        <p class="sub">Your wifi. No account, no upload, nothing in the middle.</p>
       </div>
 
       <div class="demo" id="demo">
@@ -60,219 +55,135 @@
     </div>
   </section>
 
-  <section class="section shell" data-reveal>
-    <div class="stack">
-      <p class="eyebrow">What it is</p>
-      <h2>AirDrop, for the machines AirDrop ignores.</h2>
-      <p class="prose">You copy a link on your laptop and you want it on your phone. Right now that means
-        opening WhatsApp and messaging yourself, or mailing yourself, or typing a URL by hand. Every one of
-        those is four or five steps and a round trip through someone else's server.</p>
-      <p class="prose">The transfer was never the hard part. Browser-to-browser sharing tools have existed for
-        years and almost nobody uses them daily, because you still have to go and open a tab first.
-        <strong>The friction is the opening, not the sending.</strong></p>
-      <p class="prose">So on the laptop there is no window at all. There is a key you hold. On the other
-        device there is a page that is already open, which needs nothing installed, which is the only way
-        this works on a phone someone is already holding.</p>
-    </div>
-  </section>
-
   <section class="section shell" id="setup">
-    <div class="stack-lg">
-      <div class="stack-sm" data-reveal>
-        <p class="eyebrow">Setup, once</p>
-        <h2>About a minute, and then never again.</h2>
-      </div>
+    <p class="eyebrow" data-reveal>Setup</p>
+    <h2 class="h-step" data-reveal>Three commands. One minute.</h2>
 
-      <ol class="steps">
-        <li>
-          <div class="step-body">
-            <h3>Install it on the laptop</h3>
-            <p>Python 3.10 or newer, and two real dependencies. On Windows you can double click
-              <span class="tag">start.bat</span> instead of touching a terminal.</p>
-            <div class="term">
-              <div class="term-bar"><i></i><i></i><i></i><span>terminal</span>
-                <button class="term-copy" data-copy type="button">copy</button></div>
-<pre><span class="d">$</span> pip install -e <span class="c">".[qr]"</span></pre>
-            </div>
+    <ol class="steps">
+
+      <li data-reveal>
+        <div class="step-body">
+          <h3>Install it</h3>
+          <div class="cmd">
+            <code>pip install "toss[qr] @ git+https://github.com/Swastikkkkk/toss"</code>
+            <button class="copy" type="button" data-copy>Copy</button>
           </div>
-        </li>
-        <li>
-          <div class="step-body">
-            <h3>Start it</h3>
-            <p>It prints a four word code, a QR, and the address to open. Then it waits.</p>
-            <div class="term">
-              <div class="term-bar"><i></i><i></i><i></i><span>terminal</span>
-                <button class="term-copy" data-copy type="button">copy</button></div>
-<pre><span class="d">$</span> toss serve
+          <p class="hint">Python 3.10 or newer. Two dependencies, nothing else.</p>
+        </div>
+      </li>
 
-  toss is up on <span class="c">http://192.168.1.5:7777</span>
-
-  code         <span class="c">scout-gopher-crater-nest</span>
-  session      <span class="c">WXUKGF</span>
-
-  <span class="d">[ QR code ]</span>
-
-  Hold right-ctrl for 0.4s to send whatever is selected.</pre>
-            </div>
+      <li data-reveal>
+        <div class="step-body">
+          <h3>Start it</h3>
+          <div class="cmd">
+            <code>toss serve</code>
+            <button class="copy" type="button" data-copy>Copy</button>
           </div>
-        </li>
-        <li>
-          <div class="step-body">
-            <h3>Open that address on your phone</h3>
-            <p>Any browser, no install. Scan the QR or type the four words. Then use your browser's
-              <strong>add to home screen</strong> and it gets an icon and opens full screen like an app.</p>
-          </div>
-        </li>
-        <li>
-          <div class="step-body">
-            <h3>Optional, but do it</h3>
-            <p>Starts toss when you log in, with no console window in your taskbar. It writes one plain
-              text file into your startup folder that you can read and delete by hand.</p>
-            <div class="term">
-              <div class="term-bar"><i></i><i></i><i></i><span>terminal</span>
-                <button class="term-copy" data-copy type="button">copy</button></div>
-<pre><span class="d">$</span> toss install</pre>
-            </div>
-          </div>
-        </li>
-      </ol>
-    </div>
-  </section>
-
-  <section class="section shell" id="use">
-    <div class="stack-lg">
-      <div class="stack-sm" data-reveal>
-        <p class="eyebrow">Every day after that</p>
-        <h2>Highlight, hold, done.</h2>
-      </div>
-      <div class="split" data-reveal>
-        <img src="screenshot-phone.png" width="390" height="844" loading="lazy"
-             alt="The toss page on a phone: a received link, a file called report.pdf with a Save button, and a box for sending something back.">
-        <div class="stack">
-          <p class="prose">Select a link, a paragraph, a block of code. Hold <kbd>right&#8209;ctrl</kbd> for
-            four tenths of a second. It copies the selection for you first, so there is no
-            copy-then-send dance, and it has arrived by the time you let go. Files you copied in Explorer
-            go the same way.</p>
-          <p class="prose">Going back: type in the box and press enter, paste anywhere on the page, or
-            drop files onto it. Text lands on your laptop clipboard ready to paste. Files land in your
-            Downloads.</p>
-          <p class="prose">The pairing is remembered on both sides, so the phone rejoins on its own after
-            it sleeps, after you close the tab, and after either device reboots.</p>
+          <figure class="shot wide">
+            <img src="shot-terminal.png" width="800" height="672" loading="lazy"
+                 alt="Terminal showing toss serve: the address http colon slash slash 192.168.1.5 port 7901, a four word code scout-gopher-crater-nest, a session code, and a large scannable QR code.">
+            <figcaption>Four words and a QR. That is the whole pairing.</figcaption>
+          </figure>
         </div>
-      </div>
-    </div>
-  </section>
+      </li>
 
-  <section class="section shell" id="code">
-    <div class="stack-lg">
-      <div class="stack-sm" data-reveal>
-        <p class="eyebrow">The pairing code</p>
-        <h2>Four words are the whole secret.</h2>
-      </div>
-      <div class="stack" data-reveal>
-        <p class="prose">They come from a list of 397 short, unambiguous words, so a code survives being
-          read out loud across a room. Here is one, generated the way the tool generates it:</p>
-
-        <div class="coder">
-          <div class="coder-out" id="code-out" aria-live="polite"><span id="code-words"></span></div>
-          <div class="coder-row">
-            <button class="btn" id="roll" type="button">Another one</button>
-            <small id="odds"></small>
-          </div>
+      <li data-reveal>
+        <div class="step-body">
+          <h3>Scan the QR on your phone</h3>
+          <p class="hint">Any browser, nothing to install. Then <strong>add to home screen</strong>
+            and it opens like an app.</p>
+          <figure class="shot tall">
+            <img src="screenshot-phone.png" width="390" height="844" loading="lazy"
+                 alt="The toss page on a phone showing a received link, a file called report dot pdf with a Save button, and a box to send something back.">
+            <figcaption>Your phone, receiving.</figcaption>
+          </figure>
         </div>
+      </li>
 
-        <p class="prose">The code never crosses the network. Both sides stretch it through PBKDF2-SHA256 at
-          200,000 iterations into one AES-256 key. Joining is a challenge and response: the laptop sends
-          random bytes, you send back an HMAC, and anything that cannot produce it is dropped before it
-          sees anything at all.</p>
-        <p class="prose">Every item is sealed with AES-GCM before it leaves, so the laptop relays ciphertext
-          it has no way to open, and anyone sniffing the wifi sees nothing. Six wrong codes from one address
-          and that address stops being answered, which is what makes four words enough.</p>
-        <p class="prose">Both devices show the same six character <strong>session</strong> fingerprint
-          derived from that key. If they match, you are talking to each other. If they do not, something is
-          wrong, and that is worth knowing.</p>
-      </div>
-    </div>
-  </section>
+    </ol>
 
-  <section class="section shell" id="limits">
-    <div class="stack-lg">
-      <div class="stack-sm" data-reveal>
-        <p class="eyebrow">What will break</p>
-        <h2>Three things worth knowing first.</h2>
+    <div class="after" data-reveal>
+      <div>
+        <h3>That is it.</h3>
+        <p class="hint">Highlight anything, hold <kbd>right&#8209;ctrl</kbd>. Type on the phone to send
+          back. It remembers the pairing, so you never do this again.</p>
       </div>
-      <div class="notes" data-reveal>
-        <div class="note">
-          <h3>College and office wifi will probably block it</h3>
-          <p>Many public networks turn on client isolation, which stops devices talking to each other
-            directly. On that kind of network the page will not connect at all, and nothing inside the
-            network can route around it. Home wifi works. A phone hotspot works.</p>
-        </div>
-        <div class="note">
-          <h3>The hotkey is Windows only right now</h3>
-          <p>It uses a raw key-state poll through ctypes, so there is nothing extra to install and no admin
-            rights needed, but it is Windows specific. Everywhere else the hub, the page and
-            <span class="tag">toss send</span> all work. You just do not get hold-to-send.</p>
-        </div>
-        <div class="note">
-          <h3>The laptop is the hub</h3>
-          <p>If it sleeps, the session ends. That is the intended shape rather than a limitation to fix.
-            There is no server in the middle keeping anything alive, which is the trade that makes the rest
-            of it true.</p>
-        </div>
+      <div class="cmd ghost">
+        <code>toss install</code>
+        <button class="copy" type="button" data-copy>Copy</button>
       </div>
-    </div>
-  </section>
-
-  <section class="section shell" id="reference">
-    <div class="stack-lg">
-      <div class="stack-sm" data-reveal>
-        <p class="eyebrow">Reference</p>
-        <h2>Every command.</h2>
-      </div>
-      <div class="tablewrap" data-reveal>
-        <table>
-          <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
-          <tbody>
-            <tr><td class="cmd">toss serve</td><td class="what">Start the hub and watch for the hotkey.</td></tr>
-            <tr><td class="cmd">toss serve --new-code</td><td class="what">Rotate the pairing code. Devices holding the old one stop being able to join.</td></tr>
-            <tr><td class="cmd">toss serve --key capslock</td><td class="what">Hold a different key. Also right-alt, right-shift, scrolllock, f9. Remembered after the first time.</td></tr>
-            <tr><td class="cmd">toss serve --hold 0.25</td><td class="what">Make the hold shorter or longer.</td></tr>
-            <tr><td class="cmd">toss serve --no-grab</td><td class="what">Send only what is already on the clipboard, instead of copying the selection first.</td></tr>
-            <tr><td class="cmd">toss send</td><td class="what">Send the clipboard from another terminal. No hotkey needed.</td></tr>
-            <tr><td class="cmd">toss send notes.pdf</td><td class="what">Send a file, or a piece of text, by argument.</td></tr>
-            <tr><td class="cmd">toss install</td><td class="what">Start on login, quietly.</td></tr>
-            <tr><td class="cmd">toss status</td><td class="what">The code, the address, and every saved setting.</td></tr>
-            <tr><td class="cmd">toss uninstall</td><td class="what">Stop starting on login.</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <p class="hint">Optional: starts it on login, no terminal window.</p>
     </div>
   </section>
 
   <section class="section shell">
-    <div class="stack-lg">
-      <div class="stack-sm" data-reveal>
-        <p class="eyebrow">Under it</p>
-        <h2>What is actually running.</h2>
+    <div class="cards" data-reveal>
+      <div class="card">
+        <span class="card-k">Encrypted</span>
+        <p>The four words become an AES-256 key. Your laptop relays sealed bytes it cannot read.</p>
       </div>
-      <dl class="facts" data-reveal>
-        <div class="fact"><dt>laptop side</dt><dd>Python 3.10+, asyncio, <span class="tag">websockets</span> and <span class="tag">cryptography</span>. That is the whole dependency list.</dd></div>
-        <div class="fact"><dt>phone side</dt><dd>One HTML file and one JS file. No build step, no framework, no install. WebCrypto does the matching key derivation.</dd></div>
-        <div class="fact"><dt>the page</dt><dd>Served under a strict Content-Security-Policy with no inline script and no outside origins, so it can only ever talk to the hub it came from.</dd></div>
-        <div class="fact"><dt>on disk</dt><dd>Nothing that passes through is written anywhere. The only stored thing is the pairing itself, in a readable config file you can delete.</dd></div>
-        <div class="fact"><dt>tested</dt><dd>37 Python tests, plus 21 checks driving a real Chromium against a real hub: a 400 KB file survives chunking, encryption, relay and reassembly byte for byte, and the relay is watched from the inside to confirm no plaintext ever passes through it.</dd></div>
-      </dl>
+      <div class="card">
+        <span class="card-k">No server</span>
+        <p>Device to device over your own wifi. Nothing is uploaded, nothing is stored.</p>
+      </div>
+      <div class="card">
+        <span class="card-k">No account</span>
+        <p>No login, no signup, no app on the receiving side. Close the tab and it is gone.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section shell" id="commands">
+    <p class="eyebrow" data-reveal>Commands</p>
+    <h2 class="h-step" data-reveal>Everything else.</h2>
+    <div class="cmdlist" data-reveal>
+      <div class="cmd row"><code>toss send</code>
+        <span class="what">Send your clipboard without the hotkey</span>
+        <button class="copy" type="button" data-copy>Copy</button></div>
+      <div class="cmd row"><code>toss send notes.pdf</code>
+        <span class="what">Send a file by name</span>
+        <button class="copy" type="button" data-copy>Copy</button></div>
+      <div class="cmd row"><code>toss status</code>
+        <span class="what">Your code, address and settings</span>
+        <button class="copy" type="button" data-copy>Copy</button></div>
+      <div class="cmd row"><code>toss serve --new-code</code>
+        <span class="what">Rotate the code, cut old devices off</span>
+        <button class="copy" type="button" data-copy>Copy</button></div>
+      <div class="cmd row"><code>toss serve --key capslock</code>
+        <span class="what">Hold a different key</span>
+        <button class="copy" type="button" data-copy>Copy</button></div>
+      <div class="cmd row"><code>toss uninstall</code>
+        <span class="what">Stop starting on login</span>
+        <button class="copy" type="button" data-copy>Copy</button></div>
+    </div>
+  </section>
+
+  <section class="section shell">
+    <p class="eyebrow" data-reveal>Before you try it</p>
+    <div class="notes" data-reveal>
+      <div class="note">
+        <h3>College wifi will block it</h3>
+        <p>Client isolation stops devices talking directly. Home wifi works. A phone hotspot works.</p>
+      </div>
+      <div class="note">
+        <h3>The hotkey is Windows only</h3>
+        <p>Elsewhere everything works except hold-to-send. Use <span class="tag">toss send</span>.</p>
+      </div>
+      <div class="note">
+        <h3>Your laptop is the hub</h3>
+        <p>If it sleeps, the session ends. No server in the middle is the point.</p>
+      </div>
     </div>
   </section>
 
   <footer class="foot shell">
-    <p>Built in an afternoon. MIT licensed.</p>
-    <p>If it will not connect, you are almost certainly on a network with client isolation. Try a phone
-      hotspot before you try to debug it.</p>
+    <a class="btn btn-primary" href="https://github.com/Swastikkkkk/toss">Get it on GitHub</a>
+    <p>MIT licensed. Built in an afternoon.</p>
   </footer>
 
 </main>
+
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>

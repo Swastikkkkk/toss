@@ -25,4 +25,4 @@ toss = "toss.cli:main"
 packages = ["toss"]
 
 [tool.setuptools.package-data]
-toss = []
+toss = ["web/*"]

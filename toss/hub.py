@@ -22,7 +22,8 @@ from websockets.http11 import Response
 
 from .crypto import KEY_BYTES, SALT_BYTES, b64, derive_key, fingerprint, make_code, verify_proof
 
-WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+# ships inside the package, so a pip install carries the receiver page with it
+WEB_DIR = Path(__file__).resolve().parent / "web"
 MAX_MESSAGE = 8 * 1024 * 1024          # one chunk, with room to spare
 AUTH_TIMEOUT = 20                       # seconds to answer the challenge
 FAILED_LIMIT = 6                        # wrong codes allowed per address
