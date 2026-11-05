@@ -118,7 +118,11 @@ function connect(code, name) {
       if (msg.t === "hello") {
         try {
           state.key = await deriveKey(code, msg.salt, msg.iterations);
-          ws.send(JSON.stringify({ t: "auth", name, proof: await proof(state.key, msg.challenge) }));
+          const had = store.get("epoch");
+          const seen = had === null ? null : had === msg.epoch ? Number(store.get("seq") || 0) : 0;
+          if (store.get("epoch") !== msg.epoch) { store.set("epoch", msg.epoch || ""); store.set("seq", "0"); }
+          ws.send(JSON.stringify({ t: "auth", name, proof: await proof(state.key, msg.challenge),
+                                   since: seen, epoch: msg.epoch }));
         } catch (err) { reject(err); }
       } else if (msg.t === "ready") {
         state.me = msg.you;
@@ -145,6 +149,9 @@ function connect(code, name) {
 }
 
 async function handle(msg) {
+  if (msg.seq && msg.epoch === store.get("epoch") && msg.seq > Number(store.get("seq") || 0)) {
+    if (msg.t === "item" || (msg.t === "chunk" && msg.i === msg.n - 1)) store.set("seq", String(msg.seq));
+  }
   if (msg.t === "joined") { state.peers.push(msg.peer); renderPeers(); toast(`${msg.peer.name} joined`); }
   else if (msg.t === "left") { state.peers = state.peers.filter((p) => p.id !== msg.peer.id); renderPeers(); }
   else if (msg.t === "item") {

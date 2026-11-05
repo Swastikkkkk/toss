@@ -28,6 +28,8 @@ MAX_MESSAGE = 8 * 1024 * 1024          # one chunk, with room to spare
 AUTH_TIMEOUT = 20                       # seconds to answer the challenge
 FAILED_LIMIT = 6                        # wrong codes allowed per address
 FAILED_WINDOW = 60                      # ...per this many seconds
+BACKLOG_BYTES = 80 * 1024 * 1024        # what waits for a phone that was asleep
+BACKLOG_AGE = 12 * 3600
 
 
 def lan_ip() -> str:
@@ -95,6 +97,9 @@ class Hub:
         self.peers: dict[str, Peer] = {}
         self.failures: dict[str, list[float]] = {}
         self.on_item = None  # optional callback for local listeners
+        self.epoch = b64(os.urandom(6))
+        self.seq = 0
+        self.backlog: list[tuple[int, float, str, str]] = []   # seq, time, sender name, raw
         self.pair_link = None  # set by the cli; shown at /pair to localhost only
         import hashlib
         self.public_id = hashlib.sha256(b"toss-id" + self.salt).hexdigest()[:12]
@@ -185,6 +190,7 @@ class Hub:
             "salt": b64(self.salt),
             "challenge": b64(challenge),
             "iterations": 200_000,
+            "epoch": self.epoch,
         }))
 
         try:
@@ -209,6 +215,17 @@ class Hub:
         }))
         await self._broadcast({"t": "joined", "peer": peer.public()}, skip=peer.id)
 
+        # A phone that was asleep or closed gets what it missed, like AirDrop
+        # waiting for you to unlock. Still only ciphertext, only in memory.
+        since = msg.get("since")
+        if isinstance(since, int) and msg.get("epoch") == self.epoch:
+            for seq, _, sender, raw in list(self.backlog):
+                if seq > since and sender != peer.name:
+                    try:
+                        await ws.send(raw)
+                    except websockets.ConnectionClosed:
+                        break
+
         try:
             async for raw in ws:
                 try:
@@ -219,6 +236,11 @@ class Hub:
                 if kind in ("item", "chunk"):
                     # sealed by the sender, relayed untouched
                     msg["from"] = peer.public()
+                    self.seq += 1
+                    msg["seq"] = self.seq
+                    msg["epoch"] = self.epoch
+                    raw_out = json.dumps(msg)
+                    self._remember(self.seq, peer.name, raw_out)
                     await self._broadcast(msg, skip=peer.id)
                     if self.on_item and kind == "item":
                         self.on_item(msg)
@@ -229,6 +251,13 @@ class Hub:
         finally:
             self.peers.pop(peer.id, None)
             await self._broadcast({"t": "left", "peer": peer.public()})
+
+    def _remember(self, seq: int, sender: str, raw: str) -> None:
+        now = time.time()
+        self.backlog.append((seq, now, sender, raw))
+        total = sum(len(r) for *_, r in self.backlog)
+        while self.backlog and (total > BACKLOG_BYTES or now - self.backlog[0][1] > BACKLOG_AGE):
+            total -= len(self.backlog.pop(0)[3])
 
     async def _broadcast(self, msg: dict, skip: str | None = None) -> None:
         raw = json.dumps(msg)

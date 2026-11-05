@@ -33,7 +33,6 @@
     <a class="brand" href="#top">toss<b>.</b></a>
     <nav class="navlinks">
       <a href="#setup">Setup</a>
-      <a href="#commands">Commands</a>
       <a href="https://github.com/Swastikkkkk/toss">GitHub</a>
     </nav>
   </div>
@@ -45,10 +44,12 @@
     <div class="hero-grid">
       <div class="hero-copy">
         <h1 id="hero-title">toss<span style="color:var(--accent)">.</span></h1>
-        <p class="lede" id="hero-lede">
-          Highlight something. Hold a key. It is <strong>on your phone</strong> before you let go.
-        </p>
-        <p class="sub">Or just copy. Text, images and files you copy on your laptop show up on your phone.</p>
+        <p class="lede" id="hero-lede">AirDrop for <strong>any laptop and any phone.</strong></p>
+        <p class="sub">Copy on your laptop, it is on your phone. Photos, files, links, text, both ways. Pair once and forget about it.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="#setup">Set it up</a>
+          <a class="btn" href="https://github.com/Swastikkkkk/toss">GitHub</a>
+        </div>
       </div>
 
       <div class="demo" id="demo">
@@ -61,147 +62,72 @@
                   fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"></rect>
           </svg>
         </button>
-
         <div class="demo-wire">
           <svg viewBox="0 0 160 78" preserveAspectRatio="none" aria-hidden="true">
             <path id="wire-path" class="path" d="M 4 52 Q 80 6 156 34"></path>
           </svg>
           <div class="demo-chip" id="chip"></div>
         </div>
-
         <div class="demo-phone" id="demo-phone" aria-hidden="true">
           <div class="demo-item">github.com/Swastikkkkk</div>
         </div>
-
-        <p class="demo-hint" id="demo-hint">hold <b>right ctrl</b>, or press the key</p>
+        <p class="demo-hint" id="demo-hint">highlight any text here, then hold <b>right ctrl</b></p>
       </div>
     </div>
+    <p class="platforms">iPhone <i></i> Android <i></i> Windows <i></i> Mac <i></i> Linux</p>
   </section>
 
   <section class="section shell" id="setup">
-    <p class="eyebrow" data-reveal>Setup</p>
-    <h2 class="h-step" data-reveal>Install, run, scan. Done.</h2>
-
+    <h2 class="h-step" data-reveal>One minute, once.</h2>
     <ol class="steps">
-
       <li data-reveal>
         <div class="step-body">
-          <h3>Install it</h3>
+          <h3>Install</h3>
           <div class="cmd">
-            <code>pip install "toss[qr] @ git+https://github.com/Swastikkkkk/toss"</code>
+            <code>pip install "toss @ git+https://github.com/Swastikkkkk/toss"</code>
             <button class="copy" type="button" data-copy>Copy</button>
           </div>
-          <p class="hint">Python 3.10 or newer. On Windows it lives in your tray.</p>
         </div>
       </li>
-
       <li data-reveal>
         <div class="step-body">
-          <h3>Start it</h3>
+          <h3>Run it</h3>
           <div class="cmd">
             <code>toss</code>
             <button class="copy" type="button" data-copy>Copy</button>
           </div>
-          <figure class="shot wide">
-            <img src="shot-terminal.png" width="800" height="700" loading="lazy"
-                 alt="Terminal showing toss serve: an https address on the local network, a four word code scout-gopher-crater-nest, a session code, and a large scannable QR code.">
-            <figcaption>Scan this. That is the whole pairing.</figcaption>
-          </figure>
+          <p class="hint">It moves to your tray and starts with your laptop from now on. Close the terminal.</p>
         </div>
       </li>
-
       <li data-reveal>
         <div class="step-body">
-          <h3>Scan the QR with your phone camera</h3>
-          <p class="hint">It connects by itself. Nothing to type, nothing to install, no warnings.
-            <strong>Add to home screen</strong> and it reconnects on its own every time.</p>
-          <figure class="shot tall">
-            <img src="screenshot-phone.png" width="390" height="844" loading="lazy"
-                 alt="The toss page on a phone showing a received link, a file called report dot pdf with a Save button, and a box to send something back.">
-            <figcaption>Your phone, receiving.</figcaption>
-          </figure>
+          <h3>Scan the QR with your phone</h3>
+          <p class="hint">It connects by itself. Tap <strong>Add to Home Screen</strong> and it opens like an app.</p>
         </div>
       </li>
-
     </ol>
-
-    <div class="after" data-reveal>
-      <div>
-        <h3>That is it.</h3>
-        <p class="hint">It runs in the background and starts when you log in, so close the terminal.
-          Copy anything and it is on your phone. Paired for good, you never do this again.</p>
-      </div>
-      <div class="cmd ghost">
-        <code>toss stop</code>
-        <button class="copy" type="button" data-copy>Copy</button>
-      </div>
-      <p class="hint">Turns it off. <span class="tag">toss uninstall</span> stops it starting on login.</p>
-    </div>
   </section>
 
   <section class="section shell">
     <div class="cards" data-reveal>
       <div class="card">
-        <span class="card-k">Encrypted</span>
-        <p>The four words become an AES-256 key. Device to device over your wifi, no server, nothing stored.</p>
+        <span class="card-k">Pair once</span>
+        <p>No sessions, no logging in. Your laptop starts toss on boot and your phone reconnects on its own.</p>
       </div>
       <div class="card">
-        <span class="card-k">Clipboard sync</span>
-        <p>Text, images and files, both ways. Password manager copies are never sent.</p>
+        <span class="card-k">Everything</span>
+        <p>Photos, PDFs, docs, links, any file. Anything copied while your phone was away is waiting when you open it.</p>
       </div>
       <div class="card">
-        <span class="card-k">Any device</span>
-        <p>iPhone, Android, Windows, Mac, Linux. The receiving side is just a browser tab.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="section shell" id="commands">
-    <p class="eyebrow" data-reveal>Commands</p>
-    <h2 class="h-step" data-reveal>Everything else.</h2>
-    <div class="cmdlist" data-reveal>
-      <div class="cmd row"><code>toss send</code>
-        <span class="what">Send your clipboard without the hotkey</span>
-        <button class="copy" type="button" data-copy>Copy</button></div>
-      <div class="cmd row"><code>toss send notes.pdf</code>
-        <span class="what">Send a file by name</span>
-        <button class="copy" type="button" data-copy>Copy</button></div>
-      <div class="cmd row"><code>toss status</code>
-        <span class="what">Your code, address and settings</span>
-        <button class="copy" type="button" data-copy>Copy</button></div>
-      <div class="cmd row"><code>toss serve --new-code</code>
-        <span class="what">Rotate the code, cut old devices off</span>
-        <button class="copy" type="button" data-copy>Copy</button></div>
-      <div class="cmd row"><code>toss serve --key capslock</code>
-        <span class="what">Hold a different key</span>
-        <button class="copy" type="button" data-copy>Copy</button></div>
-      <div class="cmd row"><code>toss uninstall</code>
-        <span class="what">Stop starting on login</span>
-        <button class="copy" type="button" data-copy>Copy</button></div>
-    </div>
-  </section>
-
-  <section class="section shell">
-    <p class="eyebrow" data-reveal>Before you try it</p>
-    <div class="notes" data-reveal>
-      <div class="note">
-        <h3>College wifi will block it</h3>
-        <p>Client isolation stops devices talking directly. Home wifi works. A phone hotspot works.</p>
-      </div>
-      <div class="note">
-        <h3>The hotkey is Windows only</h3>
-        <p>Elsewhere everything works except hold-to-send. Use <span class="tag">toss send</span>.</p>
-      </div>
-      <div class="note">
-        <h3>iPhone needs one tap</h3>
-        <p>Safari blocks websites from writing your clipboard on their own. Copies arrive pinned, one tap to copy.</p>
+        <span class="card-k">Private</span>
+        <p>Encrypted end to end, straight over your wifi. No account, no cloud, nothing stored.</p>
       </div>
     </div>
   </section>
 
   <footer class="foot shell">
-    <a class="btn btn-primary" href="https://github.com/Swastikkkkk/toss">Get it on GitHub</a>
-    <p>MIT licensed. Built in an afternoon.</p>
+    <p>Needs both devices on the same wifi. Some college and office networks block that; a phone hotspot works.</p>
+    <p>MIT licensed. <a href="https://github.com/Swastikkkkk/toss">Source on GitHub</a>.</p>
   </footer>
 
 </main>

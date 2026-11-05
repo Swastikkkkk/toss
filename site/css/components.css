@@ -403,3 +403,16 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft), 0 0 40px color-mix(in srgb, var(--accent) 50%, transparent);
 }
+
+/* ---- simplified hero bits ----------------------------------------- */
+.lede { max-width: 18ch; color: var(--ink); font-size: var(--step-2); font-weight: 600; letter-spacing: -0.03em; line-height: 1.15; }
+.lede strong { color: var(--accent); font-weight: 650; }
+.sub { max-width: 40ch; font-size: var(--step-0); line-height: 1.5; }
+.hero-cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.hero-cta .btn { border-bottom-width: 1px; }
+.platforms {
+  margin-top: clamp(30px, 5vw, 48px);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 14px;
+  font-size: 14px; color: var(--muted); letter-spacing: 0.01em;
+}
+.platforms i { width: 3px; height: 3px; border-radius: 50%; background: var(--line-strong); }

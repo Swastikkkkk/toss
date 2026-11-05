@@ -70,7 +70,9 @@ No camera? Open the address it prints and type the four words.
 pairing QR, pause sync, or open received files, and you get a notification when
 something arrives. The laptop also answers to a fixed `toss-xxxx.local` name
 over mDNS, and the phone page moves itself onto that name after the first scan,
-so it reconnects on its own even when the laptop's IP changes.
+so it reconnects on its own even when the laptop's IP changes. Anything you copy
+while the phone is asleep or the page is closed waits on the laptop (encrypted,
+in memory, up to 12 hours) and arrives the moment you open toss on the phone.
 
 The page is plain http on your wifi. Browsers only hand WebCrypto to https
 pages, so the page carries its own copy of the audited
