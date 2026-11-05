@@ -370,3 +370,36 @@
   max-width: 88vw;
 }
 #toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+/* ---- hold-to-send effect layer ------------------------------------ */
+
+.fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 45; }
+.fx-veil {
+  position: fixed; inset: 0; pointer-events: none; z-index: 39; opacity: 0;
+  background: radial-gradient(circle at var(--fx-x, 70%) var(--fx-y, 35%),
+              transparent 0, color-mix(in srgb, var(--bg) 55%, transparent) 60%);
+}
+.demo { z-index: 41; transition: box-shadow .3s var(--ease); }
+.demo.is-charging {
+  box-shadow: 0 0 0 1px var(--accent-line), 0 0 60px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow-md);
+}
+.demo.is-charging .keycap-face {
+  box-shadow: 0 0 0 var(--line-strong), 0 0 26px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.fx-spark {
+  position: absolute; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent), 0 0 3px var(--accent);
+}
+.fx-wave {
+  position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 45%, transparent),
+              inset 0 0 18px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.fx-ghost { filter: blur(1.5px); }
+.demo-phone { transition: box-shadow .35s var(--ease), border-color .35s var(--ease); }
+.demo-phone.is-hit {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 40px color-mix(in srgb, var(--accent) 50%, transparent);
+}

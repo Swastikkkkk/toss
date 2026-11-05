@@ -43,6 +43,38 @@ def lan_ip() -> str:
         s.close()
 
 
+def qr_svg(text: str) -> str:
+    try:
+        import qrcode
+    except ImportError:
+        return ""
+    q = qrcode.QRCode(border=2)
+    q.add_data(text)
+    q.make(fit=True)
+    m = q.get_matrix()
+    n = len(m)
+    rects = "".join(f'<rect x="{x}" y="{y}" width="1" height="1"/>'
+                    for y, row in enumerate(m) for x, v in enumerate(row) if v)
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {n} {n}" shape-rendering="crispEdges">'
+            f'<rect width="{n}" height="{n}" fill="#fff"/><g fill="#0b0f14">{rects}</g></svg>')
+
+
+def pair_page(link: str, code: str) -> bytes:
+    import base64
+    from html import escape
+    svg = base64.b64encode(qr_svg(link).encode()).decode()
+    return f"""<!doctype html><html><head><meta charset="utf-8"><title>toss: pair a phone</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0f14;color:#eef1f6;
+font:16px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif;text-align:center}}
+img{{width:min(78vw,340px);border-radius:18px;display:block;margin:0 auto 22px}}
+h1{{font-size:24px;margin:0 0 6px;letter-spacing:-.02em}}h1 b{{color:#58d9a4}}
+p{{color:#8d95a6;margin:4px 0}}code{{color:#58d9a4;font:15px ui-monospace,Menlo,Consolas,monospace}}</style></head>
+<body><main><img src="data:image/svg+xml;base64,{svg}" alt="QR code">
+<h1>Scan with your phone camera<b>.</b></h1><p>It connects by itself, and stays paired for good.</p>
+<p>No camera? Open <code>{escape(link.split('#')[0])}</code> and type <code>{escape(code)}</code></p></main></body></html>""".encode()
+
+
 @dataclass
 class Peer:
     id: str
@@ -63,6 +95,9 @@ class Hub:
         self.peers: dict[str, Peer] = {}
         self.failures: dict[str, list[float]] = {}
         self.on_item = None  # optional callback for local listeners
+        self.pair_link = None  # set by the cli; shown at /pair to localhost only
+        import hashlib
+        self.public_id = hashlib.sha256(b"toss-id" + self.salt).hexdigest()[:12]
 
     # ---- auth bookkeeping -------------------------------------------------
 
@@ -89,6 +124,17 @@ class Hub:
             "/icon-192.png": "icon-192.png", "/icon-512.png": "icon-512.png",
             "/apple-touch-icon.png": "apple-touch-icon.png",
         }
+        if path == "/ping":
+            # lets the phone page check whether toss-xxxx.local reaches this
+            # same hub before it moves there; reveals nothing secret
+            body = json.dumps({"toss": 1, "id": self.public_id}).encode()
+            return self._response(connection, HTTPStatus.OK, body, "application/json", cors=True)
+        if path == "/pair":
+            addr = (connection.remote_address or ("",))[0]
+            if addr not in ("127.0.0.1", "::1", "::ffff:127.0.0.1") or not self.pair_link:
+                return self._response(connection, HTTPStatus.NOT_FOUND, b"not found\n", "text/plain")
+            return self._response(connection, HTTPStatus.OK, pair_page(self.pair_link, self.code),
+                                  "text/html; charset=utf-8", page=True)
         if path == "/health":
             return self._response(connection, HTTPStatus.OK, b"ok\n", "text/plain")
         name = routes.get(path)
@@ -106,7 +152,7 @@ class Hub:
         return self._response(connection, HTTPStatus.OK, file.read_bytes(), kind)
 
     @staticmethod
-    def _response(connection, status, body: bytes, content_type: str):
+    def _response(connection, status, body: bytes, content_type: str, cors=False, page=False):
         headers = Headers({
             "Content-Type": content_type,
             "Content-Length": str(len(body)),
@@ -115,9 +161,14 @@ class Hub:
             "Referrer-Policy": "no-referrer",
             # the page only ever talks to the hub it came from
             "Content-Security-Policy":
-                "default-src 'self'; connect-src 'self' ws: wss:; "
+                "default-src 'self'; connect-src 'self' ws: wss: http: https:; "
                 "img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'",
         })
+        if cors:
+            headers["Access-Control-Allow-Origin"] = "*"
+        if page:
+            del headers["Content-Security-Policy"]
+            headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; img-src data:"
         return Response(status.value, status.phrase, headers, body)
 
     # ---- websocket --------------------------------------------------------

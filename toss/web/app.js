@@ -454,9 +454,10 @@ async function reconnect() {
     if (/code/i.test(err.message)) {
       // the laptop rotated its code, so stop guessing and ask
       state.giveUp = true;
-      forget("That code no longer works. Enter the new one.");
+      forget("That code no longer works. Scan the new QR.");
       return;
     }
+    if (state.retry === 3 && (await moveToStableName(state.code))) return;
     reconnect();
   }
 }
@@ -601,10 +602,36 @@ function init() {
   });
 }
 
+/* The QR carries the laptop's IP, which always works for the first scan but
+   changes with networks and DHCP leases. The laptop also answers to a stable
+   toss-xxxx.local name, so move there when this phone can resolve it. The
+   pairing then lives at an address that never changes. */
+async function moveToStableName(code) {
+  const params = new URLSearchParams(location.hash.slice(1));
+  const h = params.get("h") || store.get("host");
+  const id = params.get("id") || store.get("id");
+  if (h) store.set("host", h);
+  if (id) store.set("id", id);
+  if (!h || !id || !code || location.protocol !== "http:" || location.hostname === h) return false;
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 2500);
+    const r = await fetch(`http://${h}:${location.port || 80}/ping`, { signal: ctl.signal, cache: "no-store" });
+    clearTimeout(t);
+    const j = await r.json();
+    if (j.id !== id) return false;
+    location.replace(`http://${h}:${location.port || 80}/#code=${encodeURIComponent(code)}&h=${h}&id=${id}`);
+    return true;
+  } catch { return false; }
+}
+
 /** Scanning the QR opens this page with the code in the link, and a device
     that paired before has it stored. Either way, connect with no taps. */
 async function autoJoin() {
-  if (!$("#code").value.trim()) return;
+  const code = $("#code").value.trim();
+  if (!code) return;
+  $("#join button").textContent = "Connecting...";
+  if (await moveToStableName(code)) return;
   $("#join button").textContent = "Connecting...";
   $("#join").requestSubmit();
 }

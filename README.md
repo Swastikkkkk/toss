@@ -66,6 +66,12 @@ like an app and reconnects on its own after that.
 
 No camera? Open the address it prints and type the four words.
 
+**It stays linked.** On Windows toss lives in the tray: click the icon for the
+pairing QR, pause sync, or open received files, and you get a notification when
+something arrives. The laptop also answers to a fixed `toss-xxxx.local` name
+over mDNS, and the phone page moves itself onto that name after the first scan,
+so it reconnects on its own even when the laptop's IP changes.
+
 The page is plain http on your wifi. Browsers only hand WebCrypto to https
 pages, so the page carries its own copy of the audited
 [noble](https://github.com/paulmillr/noble-ciphers) crypto (AES-256-GCM,

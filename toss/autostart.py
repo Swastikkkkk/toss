@@ -37,7 +37,7 @@ def install(port: int) -> Path:
         runner = pythonw if pythonw.exists() else exe
         path.write_text(
             "@echo off\r\n"
-            f'start "" "{runner}" -m toss serve --port {port} --quiet\r\n',
+            f'start "" "{runner}" -m toss serve --port {port} --quiet --tray\r\n',
             encoding="utf-8",
         )
     elif sys.platform == "darwin":

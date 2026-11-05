@@ -98,7 +98,10 @@ async def cmd_serve(args):
     config.update(scheme=scheme)
 
     url = f"{scheme}://{ip}:{args.port}"
-    link = f"{url}/#code={hub.code}"
+    from . import mdns
+    mhost = mdns.host_for(hub.salt)
+    link = f"{url}/#code={hub.code}&h={mhost}.local&id={hub.public_id}"
+    hub.pair_link = link
 
     returning = bool(saved.get("code")) and not args.new_code and not args.code
 
@@ -122,6 +125,21 @@ async def cmd_serve(args):
         pidfile.write_text(str(os.getpid()))
     except OSError:
         pass
+    state = {"paused": False, "peers": []}
+    tray = None
+    if getattr(args, "tray", False):
+        from .tray import Tray
+        tray = Tray(args.port, Path(args.inbox).expanduser(), state)
+        if not tray.start():
+            tray = None
+
+    def ip_changed(new_ip):
+        hub.pair_link = hub.pair_link.replace(f"//{ip_box[0]}:", f"//{new_ip}:")
+        ip_box[0] = new_ip
+        print(f"  new network address {new_ip}; paired phones follow via {mhost}.local", flush=True)
+
+    ip_box = [ip]
+    asyncio.create_task(mdns.advertise(hub.salt, args.port, ip_changed))
     server = asyncio.create_task(hub.run(host=args.host, port=args.port, ssl_context=ssl_context))
 
     # Belt and braces for the copy shortcut: if an interrupt arrives in the
@@ -207,6 +225,9 @@ async def cmd_serve(args):
             while True:
                 await asyncio.sleep(0.35)
                 seq = clipboard.sequence()
+                if state["paused"]:
+                    last_seq = seq
+                    continue
                 if seq is not None:
                     if seq == last_seq:
                         continue
@@ -283,6 +304,12 @@ async def cmd_serve(args):
             async for item in sender.listen(peers=True):
                 who = item.get("from") or "a device"
                 if item["kind"] == "peer":
+                    if item["event"] == "joined":
+                        state["peers"].append(who)
+                        if tray: tray.notify(f"{who} connected")
+                    elif who in state["peers"]:
+                        state["peers"].remove(who)
+                    if tray: tray.refresh()
                     print(f"  {who} {'connected' if item['event'] == 'joined' else 'disconnected'}", flush=True)
                     continue
                 if item["kind"] == "text":
@@ -292,6 +319,7 @@ async def cmd_serve(args):
                     echo["seq"] = clipboard.sequence()
                     tail = " (on your clipboard, ready to paste)" if ok else ""
                     print(f"  {who} sent {preview(text)}{tail}")
+                    if tray: tray.notify(f"From {who}: {preview(text)}")
                 else:
                     target = Path(args.inbox).expanduser()
                     target.mkdir(parents=True, exist_ok=True)
@@ -312,6 +340,7 @@ async def cmd_serve(args):
                     echo["seq"] = clipboard.sequence()
                     tail = ", on your clipboard to paste" if ok else ""
                     print(f"  {who} sent {what}{tail}. Saved to {dest}")
+                    if tray: tray.notify(f"From {who}: {what}")
 
         asyncio.create_task(receive())
     print()
@@ -383,7 +412,7 @@ def _spawn_background(port: int) -> None:
         kw["creationflags"] = 0x00000008 | 0x08000000 | 0x00000200  # detached, no window, new group
     else:
         kw["start_new_session"] = True
-    subprocess.Popen([str(exe), "-m", "toss", "serve", "--port", str(port), "--quiet"],
+    subprocess.Popen([str(exe), "-m", "toss", "serve", "--port", str(port), "--quiet", "--tray"],
                      stdin=subprocess.DEVNULL, stdout=log, stderr=log, close_fds=True, **kw)
 
 
@@ -401,22 +430,29 @@ async def cmd_start(args):
         else:
             print(f"  toss did not start. Details: {config.CONFIG_DIR / 'toss.log'}")
             return 1
-    if not autostart.installed():
+    if True:  # rewrite every time so older installs pick up the tray
         try:
             autostart.install(port)
         except Exception:
             pass
     scheme = config.load().get("scheme", "http")
     url = f"{scheme}://{lan_ip()}:{port}"
+    from . import mdns
+    from .hub import Hub
+    h = Hub(code=code, salt=config.pairing()[1])
+    link = f"{url}/#code={code}&h={mdns.host_for(h.salt)}.local&id={h.public_id}"
+    if not args.no_window:
+        import webbrowser
+        webbrowser.open(f"http://127.0.0.1:{port}/pair")
     print()
-    art = qr(f"{url}/#code={code}")
+    art = qr(link)
     if art:
         print(art)
         print()
     print("  Scan with your phone's camera. It connects by itself, once, for good.")
     print(f"  No camera? Open {url} and type  {code}")
     print()
-    print("  toss is running in the background and starts when you log in.")
+    print("  toss is running in the background (tray icon) and starts when you log in.")
     print("  You can close this window. Copy anything and it is on your phone.")
     print("  toss stop  turns it off.")
     print()
@@ -501,6 +537,7 @@ def build_parser():
     s.add_argument("--https", action="store_true",
                    help="serve https with a self-signed certificate (phones see a warning once)")
     s.add_argument("--quiet", action="store_true", help="skip the QR, for running on login")
+    s.add_argument("--tray", action="store_true", help="show a tray icon (Windows)")
     s.set_defaults(fn=cmd_serve)
 
     s = sub.add_parser("send", help="send to a running hub")
@@ -521,6 +558,7 @@ def build_parser():
 
     s = sub.add_parser("start", help="run in the background and show the QR (what bare `toss` does)")
     s.add_argument("--port", type=int)
+    s.add_argument("--no-window", action="store_true", help="do not open the QR page")
     s.set_defaults(fn=cmd_start)
 
     s = sub.add_parser("stop", help="stop the background toss")
