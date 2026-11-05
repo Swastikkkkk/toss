@@ -154,6 +154,7 @@ async function handle(msg) {
   }
   if (msg.t === "joined") { state.peers.push(msg.peer); renderPeers(); toast(`${msg.peer.name} joined`); }
   else if (msg.t === "left") { state.peers = state.peers.filter((p) => p.id !== msg.peer.id); renderPeers(); }
+  else if (msg.t === "bridge") { showBridge(JSON.parse(dec.decode(await unseal(state.key, msg)))); }
   else if (msg.t === "item") {
     const payload = JSON.parse(dec.decode(await unseal(state.key, msg)));
     const from = msg.from && msg.from.name;
@@ -178,6 +179,19 @@ async function handle(msg) {
       else addItem({ kind: "file", name: msg.name, mime: msg.mime, bytes: joined, from });
     }
   }
+}
+
+/* ---------- iPhone: Back Tap ----------
+   A page can't write your clipboard by itself or run in the background, so on
+   iPhone the automatic part is two tiny Shortcuts on Back Tap: double-tap the
+   back of the phone and the laptop's clipboard is yours, triple-tap and yours
+   is the laptop's. No page open, no tapping Copy. */
+function showBridge(b) {
+  const box = $("#bridge");
+  if (!box || store.get("bridge-done") === "1") return;
+  const base = `http://${b.host}:${b.port}/clip?t=${encodeURIComponent(b.token)}`;
+  box.querySelectorAll("[data-url]").forEach((el) => { el.textContent = base; });
+  box.hidden = false;
 }
 
 /* ---------- sending ---------- */
@@ -570,6 +584,11 @@ function init() {
   });
 
   $("#latest-copy").addEventListener("click", copyLatest);
+  document.querySelectorAll("[data-copyurl]").forEach((btn) => btn.addEventListener("click", async () => {
+    const url = btn.parentElement.querySelector("[data-url]").textContent;
+    toast((await copyText(url)) ? "Link copied" : "Long-press the link to copy");
+  }));
+  $("#bridge-done")?.addEventListener("click", () => { store.set("bridge-done", "1"); $("#bridge").hidden = true; });
   $("#latest-save").addEventListener("click", saveLatest);
   $("#send-clipboard").addEventListener("click", sendMyClipboard);
 

@@ -139,6 +139,16 @@ async def cmd_serve(args):
         print(f"  new network address {new_ip}; paired phones follow via {mhost}.local", flush=True)
 
     ip_box = [ip]
+
+    from . import bridge
+    def bridge_event(text):
+        print(f"  {text}", flush=True)
+        if tray: tray.notify(text)
+    try:
+        bridge.start(args.port + 1, Path(args.inbox).expanduser(), bridge_event)
+        hub.bridge = (args.port + 1, bridge.token(), f"{mhost}.local")
+    except OSError as exc:
+        print(f"  iPhone bridge not started ({exc})")
     asyncio.create_task(mdns.advertise(hub.salt, args.port, ip_changed))
     server = asyncio.create_task(hub.run(host=args.host, port=args.port, ssl_context=ssl_context))
 

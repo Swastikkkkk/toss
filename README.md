@@ -66,6 +66,13 @@ like an app and reconnects on its own after that.
 
 No camera? Open the address it prints and type the four words.
 
+**iPhone, fully automatic.** A web page can't write your clipboard or run in
+the background, so the phone page shows a one-time card: two tiny Shortcuts on
+Back Tap. Double-tap the back of your iPhone and whatever you copied on the
+laptop is on your clipboard, ready to paste. Triple-tap and your phone's
+clipboard (text, photo, file) is on the laptop's. No app open, no Copy button.
+They talk to a small token-protected endpoint on port 7778 on your wifi.
+
 **It stays linked.** On Windows toss lives in the tray: click the icon for the
 pairing QR, pause sync, or open received files, and you get a notification when
 something arrives. The laptop also answers to a fixed `toss-xxxx.local` name

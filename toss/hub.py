@@ -20,7 +20,7 @@ from websockets.asyncio.server import serve
 from websockets.datastructures import Headers
 from websockets.http11 import Response
 
-from .crypto import KEY_BYTES, SALT_BYTES, b64, derive_key, fingerprint, make_code, verify_proof
+from .crypto import KEY_BYTES, SALT_BYTES, b64, derive_key, fingerprint, make_code, seal, verify_proof
 
 # ships inside the package, so a pip install carries the receiver page with it
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -100,6 +100,7 @@ class Hub:
         self.epoch = b64(os.urandom(6))
         self.seq = 0
         self.backlog: list[tuple[int, float, str, str]] = []   # seq, time, sender name, raw
+        self.bridge = None     # (port, token, host) for the iPhone Shortcuts bridge
         self.pair_link = None  # set by the cli; shown at /pair to localhost only
         import hashlib
         self.public_id = hashlib.sha256(b"toss-id" + self.salt).hexdigest()[:12]
@@ -214,6 +215,9 @@ class Hub:
             "peers": [p.public() for p in self.peers.values() if p.id != peer.id],
         }))
         await self._broadcast({"t": "joined", "peer": peer.public()}, skip=peer.id)
+        if self.bridge:
+            port, tok, host = self.bridge
+            await ws.send(json.dumps({"t": "bridge", **seal(self.key, {"port": port, "token": tok, "host": host})}))
 
         # A phone that was asleep or closed gets what it missed, like AirDrop
         # waiting for you to unlock. Still only ciphertext, only in memory.

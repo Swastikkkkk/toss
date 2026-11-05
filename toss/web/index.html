@@ -92,6 +92,13 @@
   button.link { background:none; border:0; padding:0; color:var(--muted);
                 font-size:13px; text-decoration:underline; cursor:pointer; }
   button.link:hover { color:var(--ink); }
+  .bridge { margin-bottom:12px; border-color:var(--accent); }
+  .bridge h2 { font-size:18px; margin:0 0 6px; }
+  .bridge ol { padding-left:20px; margin:12px 0; display:flex; flex-direction:column; gap:12px; font-size:15px; }
+  .urlrow { display:flex; gap:8px; align-items:center; margin-top:8px; }
+  .urlrow code { flex:1; min-width:0; overflow-x:auto; white-space:nowrap; font:12px ui-monospace,Menlo,monospace;
+                 background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px; }
+  .urlrow button { padding:7px 12px; font-size:14px; }
 </style>
 </head>
 <body>
@@ -118,6 +125,18 @@
       <span class="dot" id="dot"></span>
       <span id="peers"></span>
       <button id="forget" class="link" type="button">forget</button>
+    </div>
+
+    <div id="bridge" class="panel bridge" hidden>
+      <h2>Make it automatic</h2>
+      <p class="dim">Set this up once and you never open this page again. Double-tap the back of your phone to get the laptop's clipboard. Triple-tap to send yours.</p>
+      <ol>
+        <li>Open <b>Shortcuts</b>, tap <b>+</b>, add <b>Get Contents of URL</b> with this link, then add <b>Copy to Clipboard</b>. Name it <i>Get from laptop</i>.
+          <div class="urlrow"><code data-url></code><button type="button" data-copyurl>Copy</button></div></li>
+        <li>New shortcut: add <b>Get Clipboard</b>, then <b>Get Contents of URL</b> with the same link. Tap the arrow: Method <b>POST</b>, Request Body <b>File</b>, File <b>Clipboard</b>. Name it <i>Send to laptop</i>.</li>
+        <li><b>Settings</b> &rsaquo; Accessibility &rsaquo; Touch &rsaquo; <b>Back Tap</b>. Double Tap: <i>Get from laptop</i>. Triple Tap: <i>Send to laptop</i>.</li>
+      </ol>
+      <button id="bridge-done" class="link" type="button">Done, hide this</button>
     </div>
 
     <div id="latest" class="latest" hidden>
