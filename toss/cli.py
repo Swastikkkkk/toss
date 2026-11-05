@@ -115,9 +115,13 @@ async def cmd_serve(args):
     if returning:
         print("  Phones you paired before reconnect on their own.")
     print(f"  No camera? Open {url} and type  {hub.code}")
-    print(f"  session {hub.fingerprint}")
     print()
 
+    pidfile = config.CONFIG_DIR / "toss.pid"
+    try:
+        pidfile.write_text(str(os.getpid()))
+    except OSError:
+        pass
     server = asyncio.create_task(hub.run(host=args.host, port=args.port, ssl_context=ssl_context))
 
     # Belt and braces for the copy shortcut: if an interrupt arrives in the
@@ -359,6 +363,86 @@ async def cmd_send(args):
     return 0
 
 
+def _running(port: int) -> bool:
+    import socket
+    with socket.socket() as s:
+        s.settimeout(0.3)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _spawn_background(port: int) -> None:
+    """Start the hub with no window, detached from this terminal."""
+    import subprocess
+    config.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    log = open(config.CONFIG_DIR / "toss.log", "ab")
+    exe = Path(sys.executable)
+    kw = {}
+    if sys.platform == "win32":
+        w = exe.with_name("pythonw.exe")
+        exe = w if w.exists() else exe
+        kw["creationflags"] = 0x00000008 | 0x08000000 | 0x00000200  # detached, no window, new group
+    else:
+        kw["start_new_session"] = True
+    subprocess.Popen([str(exe), "-m", "toss", "serve", "--port", str(port), "--quiet"],
+                     stdin=subprocess.DEVNULL, stdout=log, stderr=log, close_fds=True, **kw)
+
+
+async def cmd_start(args):
+    """Bare `toss`: make sure it runs in the background, show the QR, get out of the way."""
+    saved = config.load()
+    port = args.port or saved.get("port", DEFAULT_PORT)
+    code, _ = config.pairing()
+    if not _running(port):
+        _spawn_background(port)
+        for _ in range(50):
+            if _running(port):
+                break
+            time.sleep(0.1)
+        else:
+            print(f"  toss did not start. Details: {config.CONFIG_DIR / 'toss.log'}")
+            return 1
+    if not autostart.installed():
+        try:
+            autostart.install(port)
+        except Exception:
+            pass
+    scheme = config.load().get("scheme", "http")
+    url = f"{scheme}://{lan_ip()}:{port}"
+    print()
+    art = qr(f"{url}/#code={code}")
+    if art:
+        print(art)
+        print()
+    print("  Scan with your phone's camera. It connects by itself, once, for good.")
+    print(f"  No camera? Open {url} and type  {code}")
+    print()
+    print("  toss is running in the background and starts when you log in.")
+    print("  You can close this window. Copy anything and it is on your phone.")
+    print("  toss stop  turns it off.")
+    print()
+    return 0
+
+
+async def cmd_stop(args):
+    pidfile = config.CONFIG_DIR / "toss.pid"
+    try:
+        pid = int(pidfile.read_text())
+    except (OSError, ValueError):
+        print("  toss is not running\n")
+        return 0
+    try:
+        if sys.platform == "win32":
+            import subprocess
+            subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
+        else:
+            os.kill(pid, signal.SIGTERM)
+        print("  stopped. It still starts on login; toss uninstall stops that.\n")
+    except OSError:
+        print("  toss is not running\n")
+    pidfile.unlink(missing_ok=True)
+    return 0
+
+
 async def cmd_install(args):
     saved = config.load()
     path = autostart.install(args.port or saved.get("port", DEFAULT_PORT))
@@ -381,7 +465,6 @@ async def cmd_status(args):
     from .crypto import derive_key, fingerprint
     print()
     print(f"  code         {code}")
-    print(f"  session      {fingerprint(derive_key(code, salt))}")
     print(f"  address      {data.get('scheme', 'http')}://{lan_ip()}:{data.get('port', DEFAULT_PORT)}")
     print(f"  hold         {data.get('key')} for {data.get('hold')}s")
     print(f"  grab         {'copies your selection first' if data.get('grab') else 'clipboard only'}")
@@ -436,6 +519,13 @@ def build_parser():
     s = sub.add_parser("uninstall", help="stop starting on login")
     s.set_defaults(fn=cmd_uninstall)
 
+    s = sub.add_parser("start", help="run in the background and show the QR (what bare `toss` does)")
+    s.add_argument("--port", type=int)
+    s.set_defaults(fn=cmd_start)
+
+    s = sub.add_parser("stop", help="stop the background toss")
+    s.set_defaults(fn=cmd_stop)
+
     s = sub.add_parser("status", help="show the code, address and settings")
     s.set_defaults(fn=cmd_status)
     return p
@@ -444,7 +534,7 @@ def build_parser():
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0].startswith("-") and argv[0] not in ("-h", "--help"):
-        argv.insert(0, "serve")   # bare `toss` just starts it
+        argv.insert(0, "start")   # bare `toss`: background + QR
     args = build_parser().parse_args(argv)
     try:
         return asyncio.run(args.fn(args)) or 0

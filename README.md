@@ -56,7 +56,10 @@ On Windows, double click `start.bat`. To hack on it, clone and
 toss
 ```
 
-It prints a QR. **Scan it with your phone's camera. That is the whole setup.**
+It starts toss in the background (no window, and again every time you log in),
+prints a QR and hands your terminal back. Close it. **Scan the QR with your
+phone's camera. That is the whole setup.** `toss stop` turns it off; `toss serve`
+runs it in the foreground if you want to watch the log.
 The page opens, connects by itself and stays connected. No code to type, no
 name to pick, no certificate warning. Add it to your home screen and it opens
 like an app and reconnects on its own after that.

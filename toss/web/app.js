@@ -448,7 +448,6 @@ async function reconnect() {
     const info = await connect(state.code, state.name);
     state.retry = 0;
     $("#dot").classList.remove("off");
-    $("#fp").textContent = info.fingerprint;
     renderPeers();
     toast("Back on");
   } catch (err) {
@@ -517,8 +516,7 @@ function init() {
       if (location.hash) history.replaceState(null, "", location.pathname);
       $("#gate").hidden = true;
       $("#room").hidden = false;
-      $("#fp").textContent = info.fingerprint;
-      renderPeers();
+        renderPeers();
       renderItems();
       // keep phones from dozing the socket off
       setInterval(() => { try { state.ws.send(JSON.stringify({ t: "ping" })); } catch {} }, 15000);
