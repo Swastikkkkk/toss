@@ -1,0 +1,12 @@
+{
+  "appId": "dev.toss.app",
+  "appName": "toss",
+  "webDir": "../toss/web",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

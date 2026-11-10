@@ -36,6 +36,15 @@ So the laptop side has no window at all. It is a key you hold. The other side is
 just a page that is already open, and it does not need anything installed,
 which is the only way this works on a phone your friend is holding.
 
+## The phone app
+
+There is also a toss app for Android and iPhone in [`app/`](app/README.md).
+It is the same page, same UI and same features, in a native shell, plus what
+a web page is not allowed to do: toss in every app's Share menu (Android),
+the clipboard filled without a tap, a built-in QR scanner, and saving files
+through the share sheet. The browser page keeps working for any phone without
+the app. The laptop side is the same either way.
+
 ## Install
 
 ```bash
@@ -365,7 +374,9 @@ toss/hotkey.py      the hold-to-send watcher, deliberately ~60 lines
 toss/config.py      the remembered pairing and settings
 toss/autostart.py   start on login, one plain text file
 toss/cli.py         toss serve / send / install / status
-web/                the receiving page: one html, one js, a manifest, no build step
+toss/web/           the phone page: one html, one js, a manifest, no build step
+toss/web/native.js  what the app adds; does nothing in a browser
+app/                the Android and iPhone app, a native shell around toss/web
 ```
 
 ## License
