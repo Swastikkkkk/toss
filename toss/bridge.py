@@ -100,8 +100,13 @@ def start(port: int, inbox: Path, on_event=None) -> int:
                 return
             body = self.rfile.read(n)
             kind = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            q = parse_qs(urlparse(self.path).query)
+            given_name = Path((q.get("name") or [""])[0] or self.headers.get("X-Toss-Name", "")).name
             what = "something"
-            if kind.startswith("text/") or (not kind and _is_text(body)):
+            # The share sheet sends a link or a note as a "file" with a generic
+            # type, so judge by the bytes: short valid UTF-8 is text.
+            vague = kind in ("", "application/octet-stream", "application/x-www-form-urlencoded")
+            if kind.startswith("text/") or (vague and len(body) < 1_000_000 and _is_text(body)):
                 clipboard.write(body.decode("utf-8", "replace"))
                 what = "text"
             elif kind.startswith("image/") and (png := _to_png(body)):
@@ -110,7 +115,11 @@ def start(port: int, inbox: Path, on_event=None) -> int:
             else:
                 ext = mimetypes.guess_extension(kind) or ".bin"
                 inbox.mkdir(parents=True, exist_ok=True)
-                dest = inbox / time.strftime(f"iphone-%Y%m%d-%H%M%S{ext}")
+                dest = inbox / (given_name or time.strftime(f"iphone-%Y%m%d-%H%M%S{ext}"))
+                n = 2
+                while dest.exists():
+                    dest = dest.with_name(f"{Path(given_name or dest.name).stem} ({n}){dest.suffix}")
+                    n += 1
                 dest.write_bytes(body)
                 clipboard.write_files([dest])
                 what = dest.name

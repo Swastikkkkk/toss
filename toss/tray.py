@@ -49,7 +49,9 @@ class Tray:
 
         menu = pystray.Menu(
             M(status, None, enabled=False),
-            M("Pair a phone (show QR)", self.show_qr, default=True),
+            # one click on the icon sends whatever you copied, like a drop target
+            M("Send my clipboard to phone", self.send_clipboard, default=True),
+            M("Pair a phone (show QR)", self.show_qr),
             M("Pause clipboard sync", self.toggle_pause, checked=lambda _: bool(self.state.get("paused"))),
             M("Open received files", self.open_inbox),
             pystray.Menu.SEPARATOR,
@@ -58,6 +60,12 @@ class Tray:
         self.icon = pystray.Icon("toss", image, "toss", menu)
         self.icon.run_detached()
         return True
+
+    def send_clipboard(self, *_):
+        import subprocess
+        from .autostart import _pythonw
+        subprocess.Popen([str(_pythonw()), "-m", "toss", "send", "--port", str(self.port)],
+                         creationflags=0x08000000 if sys.platform == "win32" else 0)
 
     def show_qr(self, *_):
         webbrowser.open(f"http://127.0.0.1:{self.port}/pair")

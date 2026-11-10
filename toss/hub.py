@@ -84,8 +84,13 @@ class Peer:
     ws: object
     joined: float = field(default_factory=time.time)
 
+    local: bool = False
+    quiet: bool = False     # a one-shot sender (`toss send`): no joined/left noise
+
     def public(self) -> dict:
-        return {"id": self.id, "name": self.name}
+        # local marks the laptop's own helpers (the hotkey/sync client and
+        # `toss send`), so the laptop never treats its own sends as arrivals
+        return {"id": self.id, "name": self.name, **({"local": True} if self.local else {})}
 
 
 class Hub:
@@ -206,15 +211,18 @@ class Hub:
             await ws.close(4001, "wrong code")
             return
 
-        peer = Peer(id=b64(os.urandom(6)), name=str(msg.get("name") or "a device")[:40], ws=ws)
+        peer = Peer(id=b64(os.urandom(6)), name=str(msg.get("name") or "a device")[:40], ws=ws,
+                    local=addr in ("127.0.0.1", "::1", "::ffff:127.0.0.1"),
+                    quiet=bool(msg.get("quiet")))
         self.peers[peer.id] = peer
         await ws.send(json.dumps({
             "t": "ready",
             "you": peer.public(),
             "fingerprint": self.fingerprint,
-            "peers": [p.public() for p in self.peers.values() if p.id != peer.id],
+            "peers": [p.public() for p in self.peers.values() if p.id != peer.id and not p.quiet],
         }))
-        await self._broadcast({"t": "joined", "peer": peer.public()}, skip=peer.id)
+        if not peer.quiet:
+            await self._broadcast({"t": "joined", "peer": peer.public()}, skip=peer.id)
         if self.bridge:
             port, tok, host = self.bridge
             await ws.send(json.dumps({"t": "bridge", **seal(self.key, {"port": port, "token": tok, "host": host})}))
@@ -254,7 +262,18 @@ class Hub:
             pass
         finally:
             self.peers.pop(peer.id, None)
-            await self._broadcast({"t": "left", "peer": peer.public()})
+            if not peer.quiet:
+                await self._broadcast({"t": "left", "peer": peer.public()})
+
+    def pair_fragment(self) -> str:
+        """What goes after # in the QR link. It carries the stretched key as
+        well as the code: no more secret than the code itself, and a #fragment
+        never leaves the phone, but it spares the phone 200k rounds of PBKDF2
+        in JavaScript, which is the slow part of a first scan."""
+        import base64
+        from . import mdns
+        k = base64.urlsafe_b64encode(self.key).decode().rstrip("=")
+        return f"code={self.code}&k={k}&h={mdns.host_for(self.salt)}.local&id={self.public_id}"
 
     def _remember(self, seq: int, sender: str, raw: str) -> None:
         now = time.time()

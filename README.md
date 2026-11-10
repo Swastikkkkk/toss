@@ -66,11 +66,25 @@ like an app and reconnects on its own after that.
 
 No camera? Open the address it prints and type the four words.
 
+**Right-click, Send to phone.** On Windows every file and folder gets a
+**Send to phone** entry in Explorer (on Windows 11 it is under *Show more
+options*, and also in *Send to*). Folders go as a zip. Clicking the tray icon
+sends whatever you copied. Nothing to open, it starts toss if it was not
+running. `toss send a.pdf b.jpg somefolder` does the same from a terminal.
+
+**The phone page opens instantly.** It goes straight to the connected screen
+with no pairing step, the first scan skips the slow key stretching (the QR
+carries the stretched key, which is no more secret than the code beside it,
+and a `#fragment` never leaves the phone), and finding the stable
+`toss-xxxx.local` name happens in the background instead of before connecting.
+
 **iPhone, fully automatic.** A web page can't write your clipboard or run in
-the background, so the phone page shows a one-time card: two tiny Shortcuts on
-Back Tap. Double-tap the back of your iPhone and whatever you copied on the
-laptop is on your clipboard, ready to paste. Triple-tap and your phone's
-clipboard (text, photo, file) is on the laptop's. No app open, no Copy button.
+the background, so the phone page offers one Shortcut, once (it lives under the
+**···** button after that). It makes toss a share option, like AirDrop: share a
+photo, a link or a file from any app, tap **toss**, and it is on the laptop's
+clipboard. Put the same Shortcut on Back Tap and double-tapping the back of
+your iPhone pulls whatever you copied on the laptop. No page open, no Copy
+button.
 They talk to a small token-protected endpoint on port 7778 on your wifi.
 
 **It stays linked.** On Windows toss lives in the tray: click the icon for the

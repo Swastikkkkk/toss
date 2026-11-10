@@ -14,7 +14,8 @@ CHUNK = 192 * 1024
 
 
 class Client:
-    def __init__(self, url: str, code: str, name: str = "laptop", insecure: bool = False):
+    def __init__(self, url: str, code: str, name: str = "laptop", insecure: bool = False,
+                 quiet: bool = False):
         self.url = url.rstrip("/")
         self.code = code
         self.name = name
@@ -25,6 +26,7 @@ class Client:
         self.key = None
         self.fingerprint = None
         self.on_item = None
+        self.quiet = quiet
 
     async def __aenter__(self):
         await self.connect()
@@ -48,7 +50,8 @@ class Client:
         self.key = derive_key(self.code, unb64(hello["salt"]))
         self.fingerprint = fingerprint(self.key)
         await self.ws.send(json.dumps({
-            "t": "auth", "name": self.name, "proof": proof(self.key, unb64(hello["challenge"]))
+            "t": "auth", "name": self.name, "proof": proof(self.key, unb64(hello["challenge"])),
+            **({"quiet": True} if self.quiet else {}),
         }))
         try:
             ready = json.loads(await asyncio.wait_for(self.ws.recv(), timeout))
@@ -91,10 +94,12 @@ class Client:
             msg = json.loads(raw)
             kind = msg.get("t")
             if kind in ("joined", "left") and peers:
-                yield {"kind": "peer", "event": kind, "from": (msg.get("peer") or {}).get("name")}
+                peer = msg.get("peer") or {}
+                yield {"kind": "peer", "event": kind, "from": peer.get("name"), "local": bool(peer.get("local"))}
             elif kind == "item":
                 payload = open_sealed(self.key, msg)
                 payload["from"] = (msg.get("from") or {}).get("name")
+                payload["local"] = bool((msg.get("from") or {}).get("local"))
                 yield payload
             elif kind == "chunk":
                 entry = pending.setdefault(msg["id"], {"parts": {}, "n": msg["n"]})
@@ -107,4 +112,5 @@ class Client:
                         "mime": msg.get("mime"), "bytes": body,
                         "sync": bool(msg.get("sync")),
                         "from": (msg.get("from") or {}).get("name"),
+                        "local": bool((msg.get("from") or {}).get("local")),
                     }
