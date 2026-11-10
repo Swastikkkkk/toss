@@ -123,3 +123,51 @@ async def test_the_page_is_served(hub):
     assert b"<title>toss</title>" in body
     status, body = await asyncio.to_thread(get, "/app.js")
     assert status == 200 and b"deriveKey" in body
+
+
+async def test_sends_from_the_laptop_itself_are_marked_local(hub):
+    """`toss send` and the right-click menu run on the laptop. The laptop's own
+    listener must see them as local, or it would paste them back onto its own
+    clipboard and drop a second copy into Downloads."""
+    async with Client(hub.url, hub.code, name="your laptop") as listener, \
+               Client(hub.url, hub.code, name="your laptop", quiet=True) as sender:
+        got = asyncio.create_task(anext(listener.listen()))
+        await asyncio.sleep(0.1)
+        await sender.send_text("hello")
+        item = await asyncio.wait_for(got, 5)
+    assert item["local"] is True
+
+
+async def test_one_shot_senders_do_not_announce_themselves(hub):
+    """A right-click send must not pop "your laptop joined" on the phone."""
+    async with Client(hub.url, hub.code, name="phone") as phone:
+        events = []
+
+        async def watch():
+            async for ev in phone.listen(peers=True):
+                events.append(ev)
+
+        task = asyncio.create_task(watch())
+        async with Client(hub.url, hub.code, name="your laptop", quiet=True) as s:
+            await s.send_text("x")
+        await asyncio.sleep(0.3)
+        task.cancel()
+    assert [e for e in events if e["kind"] == "peer"] == []
+    assert any(e.get("data") == "x" for e in events)
+
+
+def test_qr_fragment_carries_the_same_key_the_hub_uses():
+    """The phone skips PBKDF2 on the first scan by taking the key from the QR,
+    so that key must be exactly the one the code derives."""
+    import base64
+    from urllib.parse import parse_qs
+    from toss.crypto import derive_key
+    from toss.hub import Hub
+
+    h = Hub(code="amber-fox-tiger-reef")
+    q = parse_qs(h.pair_fragment())
+    k = q["k"][0]
+    raw = base64.urlsafe_b64decode(k + "=" * (-len(k) % 4))
+    assert raw == derive_key("amber-fox-tiger-reef", h.salt)
+    assert q["code"][0] == "amber-fox-tiger-reef"
+    assert q["h"][0].endswith(".local")

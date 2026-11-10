@@ -100,7 +100,7 @@ async def cmd_serve(args):
     url = f"{scheme}://{ip}:{args.port}"
     from . import mdns
     mhost = mdns.host_for(hub.salt)
-    link = f"{url}/#code={hub.code}&h={mhost}.local&id={hub.public_id}"
+    link = f"{url}/#{hub.pair_fragment()}"
     hub.pair_link = link
 
     returning = bool(saved.get("code")) and not args.new_code and not args.code
@@ -313,6 +313,19 @@ async def cmd_serve(args):
         async def receive():
             async for item in sender.listen(peers=True):
                 who = item.get("from") or "a device"
+                if item.get("local"):
+                    # `toss send` or the right-click menu on this same laptop.
+                    # It went to the phone; it must not land back on this
+                    # clipboard or in Downloads. Just say it went.
+                    if item["kind"] == "peer":
+                        continue
+                    what = item.get("name") or preview(item.get("data") or "")
+                    phones = ", ".join(state["peers"])
+                    msg = (f"Sent {what} to {phones}" if phones
+                           else f"{what} is waiting; it arrives when your phone opens toss")
+                    print(f"  {msg}", flush=True)
+                    if tray: tray.notify(msg)
+                    continue
                 if item["kind"] == "peer":
                     if item["event"] == "joined":
                         state["peers"].append(who)
@@ -371,21 +384,53 @@ def unique(path: Path) -> Path:
     return path.parent / f"{stem} ({n}){suffix}"
 
 
+def _zip_folder(folder: Path) -> tuple[bytes, str]:
+    """A folder goes as one zip, the way AirDrop sends a folder."""
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for f in sorted(folder.rglob("*")):
+            if f.is_file():
+                z.write(f, f.relative_to(folder.parent))
+    return buf.getvalue(), f"{folder.name}.zip"
+
+
 async def cmd_send(args):
+    """Send files, text or the clipboard to your phone. This is what the
+    right-click "Send to phone" menu runs, so it starts toss if it is not
+    running yet and never needs a terminal."""
     if not args.code:
-        print("toss: no pairing code yet. Run `toss serve` once first.", file=sys.stderr)
-        return 1
-    url = args.url or f"{config.load().get('scheme', 'http')}://127.0.0.1:{args.port}"
+        config.pairing()   # first ever run: make the pairing so there is something to send to
+        args.code = config.load().get("code")
+    port = args.port
+    if not args.url and not _running(port):
+        _spawn_background(port)
+        for _ in range(80):
+            if _running(port):
+                break
+            time.sleep(0.1)
+        await asyncio.sleep(1.0)   # let the background hub's own client join first
+    url = args.url or f"{config.load().get('scheme', 'http')}://127.0.0.1:{port}"
     code = normalize_code(args.code)
-    async with Client(url, code, name=args.name, insecure=url.startswith("https")) as c:
-        if args.what:
-            target = Path(args.what)
-            if target.is_file():
-                n = await c.send_file(target)
-                print(f"sent {target.name} in {n} chunk{'s' if n != 1 else ''}")
-            else:
-                await c.send_text(args.what)
-                print("sent")
+    name = args.name or config.load().get("name") or "your laptop"
+    async with Client(url, code, name=name, insecure=url.startswith("https"), quiet=True) as c:
+        if args.what and not any(Path(w).exists() for w in args.what):
+            await c.send_text(" ".join(args.what))   # `toss send hello there` is one note
+            print("sent")
+        elif args.what:
+            for what in args.what:
+                target = Path(what)
+                if target.is_dir():
+                    data, zname = await asyncio.to_thread(_zip_folder, target)
+                    await c.send_file(data, name=zname, mime="application/zip")
+                    print(f"sent {zname} ({human(len(data))})")
+                elif target.is_file():
+                    await c.send_file(target, name=target.name, mime=guess_mime(target))
+                    print(f"sent {target.name} ({human(target.stat().st_size)})")
+                else:
+                    await c.send_text(what)
+                    print("sent")
         else:
             item = clipboard.read()
             if not item:
@@ -393,8 +438,12 @@ async def cmd_send(args):
                 return 1
             if item["kind"] == "files":
                 for p in item["paths"]:
-                    await c.send_file(Path(p))
-                    print(f"sent {Path(p).name}")
+                    if Path(p).is_file():
+                        await c.send_file(Path(p), name=Path(p).name, mime=guess_mime(Path(p)))
+                        print(f"sent {Path(p).name}")
+            elif item["kind"] == "image":
+                await c.send_file(item["png"], name=image_name(), mime="image/png")
+                print(f"sent {describe_image(item['png'])}")
             else:
                 await c.send_text(item["text"])
                 print("sent clipboard text")
@@ -450,7 +499,7 @@ async def cmd_start(args):
     from . import mdns
     from .hub import Hub
     h = Hub(code=code, salt=config.pairing()[1])
-    link = f"{url}/#code={code}&h={mdns.host_for(h.salt)}.local&id={h.public_id}"
+    link = f"{url}/#{h.pair_fragment()}"
     if not args.no_window:
         import webbrowser
         webbrowser.open(f"http://127.0.0.1:{port}/pair")
@@ -550,13 +599,13 @@ def build_parser():
     s.add_argument("--tray", action="store_true", help="show a tray icon (Windows)")
     s.set_defaults(fn=cmd_serve)
 
-    s = sub.add_parser("send", help="send to a running hub")
-    s.add_argument("what", nargs="?", help="a file path or some text; omit to send the clipboard")
+    s = sub.add_parser("send", help="send files, a folder, text or your clipboard to your phone")
+    s.add_argument("what", nargs="*", help="files, folders or some text; omit to send the clipboard")
     s.add_argument("--code", default=config.load().get("code"),
                    help="defaults to the remembered pairing code")
     s.add_argument("--url", help="hub url, default localhost")
     s.add_argument("--port", type=int, default=config.load().get("port", DEFAULT_PORT))
-    s.add_argument("--name", default="this laptop")
+    s.add_argument("--name", default=None)
     s.set_defaults(fn=cmd_send)
 
     s = sub.add_parser("install", help="start toss automatically when you log in")

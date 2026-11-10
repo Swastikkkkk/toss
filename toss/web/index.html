@@ -2,178 +2,239 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>toss</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
 <link rel="icon" href="./icon-192.png" type="image/png">
-<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" content="#0b0d11">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="toss">
 <style>
   :root {
-    --bg:#0f1115; --panel:#171a21; --line:#252a34; --ink:#eef1f6; --muted:#8d95a6;
-    --accent:#58d9a4; --accent-ink:#06281c; --warn:#ff8a5c; --radius:14px;
+    --bg:#0b0d11; --panel:#15181f; --panel-2:#1c2029; --line:#262b36; --ink:#f1f3f7; --muted:#8a93a5;
+    --accent:#4fd8a0; --accent-ink:#04261a; --accent-soft:rgba(79,216,160,.14); --warn:#ff8a5c;
+    --radius:22px; --ease:cubic-bezier(.2,.8,.2,1);
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
-      --bg:#f6f7f9; --panel:#ffffff; --line:#e3e6ec; --ink:#141820; --muted:#666e7e;
-      --accent:#0f9d6e; --accent-ink:#ffffff;
+      --bg:#f3f4f7; --panel:#ffffff; --panel-2:#eef0f4; --line:#e2e5eb; --ink:#11151c; --muted:#646d7e;
+      --accent:#0c9a6a; --accent-ink:#ffffff; --accent-soft:rgba(12,154,106,.1);
     }
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; }
   body {
-    margin:0; background:var(--bg); color:var(--ink);
-    font:16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin:0; background:var(--bg); color:var(--ink); overscroll-behavior:none;
+    font:16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing:antialiased;
   }
-  .wrap { max-width:620px; margin:0 auto; padding:28px 16px calc(28px + env(safe-area-inset-bottom)); }
-  h1 { font-size:30px; margin:0 0 4px; letter-spacing:-0.02em; }
-  h1 span { color:var(--accent); }
-  .tag { color:var(--muted); font-size:14px; margin:0 0 22px; }
-  .panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px; }
-  label { display:block; font-size:13px; color:var(--muted); margin:0 0 6px; }
-  input, textarea {
-    width:100%; font:inherit; padding:11px 13px; border-radius:10px;
-    border:1px solid var(--line); background:var(--bg); color:var(--ink);
+  [hidden] { display:none !important; }
+  button { font:inherit; color:inherit; border:0; background:none; cursor:pointer; padding:0; }
+  button:active { transform:scale(.97); }
+
+  .screen {
+    min-height:100%; max-width:560px; margin:0 auto; display:flex; flex-direction:column;
+    padding:calc(14px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
   }
-  input#code { font:17px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.02em; }
-  textarea { min-height:64px; resize:vertical; }
-  .field + .field { margin-top:14px; }
-  button {
-    font:inherit; font-size:15px; font-weight:560; padding:11px 18px; border-radius:10px;
-    border:1px solid var(--line); background:var(--panel); color:var(--ink); cursor:pointer;
+
+  /* ---------- pairing ---------- */
+  #gate { justify-content:center; text-align:center; gap:10px; }
+  .mark { width:72px; height:72px; border-radius:22px; margin:0 auto 8px; background:var(--accent-soft);
+          display:grid; place-items:center; }
+  .mark i { width:22px; height:22px; border-radius:50%; background:var(--accent);
+            box-shadow:0 0 0 0 var(--accent); animation:pulse 2.2s infinite; }
+  #gate h1 { font-size:26px; letter-spacing:-.02em; margin:0; }
+  #gate p { color:var(--muted); margin:0 auto; max-width:300px; }
+  #join { margin-top:22px; display:flex; flex-direction:column; gap:10px; }
+  #code {
+    width:100%; font:17px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-align:center;
+    padding:14px; border-radius:16px; border:1px solid var(--line); background:var(--panel); color:var(--ink);
   }
-  button.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
-  button:disabled { opacity:.6; cursor:default; }
-  .row { display:flex; gap:10px; align-items:center; }
-  .row.end { justify-content:flex-end; }
-  #join button { margin-top:16px; width:100%; }
-  .err { color:var(--warn); font-size:14px; min-height:20px; margin-top:10px; }
-  .status { display:flex; align-items:center; gap:9px; font-size:14px; color:var(--muted); margin-bottom:14px; flex-wrap:wrap; }
-  .dot { width:9px; height:9px; border-radius:50%; background:var(--accent); flex:none; }
+  .err { color:var(--warn); font-size:14px; min-height:20px; }
+
+  /* ---------- the one screen ---------- */
+  .top { display:flex; align-items:center; gap:8px; min-height:36px; }
+  .pill { display:inline-flex; align-items:center; gap:8px; padding:7px 13px 7px 11px; border-radius:999px;
+          background:var(--panel); border:1px solid var(--line); font-size:14px; font-weight:560; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--accent); flex:none; transition:background .3s; }
+  .dot.wait { background:var(--muted); animation:blink 1.2s infinite; }
   .dot.off { background:var(--warn); }
-  .fp { font:12px/1 ui-monospace, Menlo, monospace; border:1px solid var(--line);
-        border-radius:999px; padding:4px 9px; color:var(--muted); }
-  ul { list-style:none; padding:0; margin:18px 0 0; display:flex; flex-direction:column; gap:10px; }
-  li { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:13px 15px; }
+  .grow { flex:1; }
+  .icon-btn { width:36px; height:36px; border-radius:50%; display:grid; place-items:center; color:var(--muted);
+              background:var(--panel); border:1px solid var(--line); font-size:18px; line-height:1; }
+
+  .stage { flex:1; display:flex; flex-direction:column; justify-content:center; padding:18px 0; min-height:300px; }
+
+  .idle { text-align:center; color:var(--muted); }
+  .rings { position:relative; width:150px; height:150px; margin:0 auto 22px; }
+  .rings span { position:absolute; inset:0; border-radius:50%; border:1.5px solid var(--accent);
+                opacity:0; animation:ripple 3s var(--ease) infinite; }
+  .rings span:nth-child(2) { animation-delay:1s; }
+  .rings span:nth-child(3) { animation-delay:2s; }
+  .rings b { position:absolute; inset:46px; border-radius:50%; background:var(--accent-soft);
+             display:grid; place-items:center; color:var(--accent); font-size:26px; }
+  .idle h2 { color:var(--ink); font-size:20px; letter-spacing:-.01em; margin:0 0 4px; }
+  .idle p { margin:0 auto; max-width:290px; font-size:15px; }
+
+  .latest { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+            padding:16px; display:flex; flex-direction:column; gap:12px;
+            animation:drop .45s var(--ease); box-shadow:0 18px 50px -24px rgba(0,0,0,.45); }
+  .latest-head { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
+  .latest-text { font-size:17px; line-height:1.45; word-break:break-word; white-space:pre-wrap;
+                 max-height:11em; overflow:auto; -webkit-user-select:text; user-select:text; }
+  .latest-img { display:block; max-width:100%; max-height:42vh; margin:0 auto; border-radius:14px;
+                -webkit-touch-callout:default; }
+  .big { width:100%; padding:15px 18px; border-radius:16px; font-size:16px; font-weight:600;
+         background:var(--panel-2); border:1px solid var(--line); }
+  .big.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .big.done { background:var(--accent-soft); color:var(--accent); border-color:transparent; }
+
+  .progress { height:4px; border-radius:4px; background:var(--panel-2); overflow:hidden; margin:0 auto; width:180px; }
+  .progress i { display:block; height:100%; width:0; background:var(--accent); transition:width .15s; }
+
+  /* recent, a quiet strip under the stage */
+  details.recent { margin-bottom:12px; }
+  details.recent summary { list-style:none; cursor:pointer; color:var(--muted); font-size:13px;
+                           padding:6px 2px; user-select:none; }
+  details.recent summary::-webkit-details-marker { display:none; }
+  ul { list-style:none; padding:0; margin:6px 0 0; display:flex; flex-direction:column; gap:8px;
+       max-height:38vh; overflow:auto; }
+  li { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:11px 13px;
+       display:flex; align-items:center; gap:10px; }
   li.mine { background:transparent; border-style:dashed; }
-  .meta { font-size:12px; color:var(--muted); text-transform:lowercase; margin-bottom:5px; }
-  .body { word-break:break-word; }
-  .body a { color:var(--accent); }
-  .text { white-space:pre-wrap; }
-  .dim { color:var(--muted); font-size:14px; }
-  .acts { margin-top:10px; display:flex; gap:8px; }
-  .acts button { padding:6px 12px; font-size:14px; font-weight:500; }
-  #empty-list { color:var(--muted); font-size:14px; margin:20px 0 0; }
-  #room.drag { outline:2px dashed var(--accent); outline-offset:8px; border-radius:var(--radius); }
+  li .body { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:15px; }
+  li .meta { font-size:12px; color:var(--muted); }
+  li a { color:var(--accent); }
+  li img { width:40px; height:40px; object-fit:cover; border-radius:9px; flex:none; }
+  li button { font-size:13px; font-weight:600; color:var(--accent); padding:6px 4px; flex:none; }
+
+  /* ---------- the dock: everything you do is one thumb away ---------- */
+  .dock { display:grid; grid-template-columns:1fr auto auto; gap:10px; }
+  .dock .big { padding:17px; }
+  .square { width:56px; border-radius:16px; background:var(--panel); border:1px solid var(--line);
+            font-size:22px; display:grid; place-items:center; }
+  .compose { display:flex; gap:8px; margin-top:10px; animation:drop .3s var(--ease); }
+  .compose textarea {
+    flex:1; font:inherit; padding:12px 14px; border-radius:16px; border:1px solid var(--line);
+    background:var(--panel); color:var(--ink); resize:none; min-height:48px; max-height:30vh;
+  }
+  .compose button { padding:0 18px; border-radius:16px; background:var(--accent); color:var(--accent-ink); font-weight:600; }
+
+  /* ---------- sheet: settings, iPhone setup ---------- */
+  .sheet-bg { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:5; animation:fade .2s; }
+  .sheet { position:fixed; left:0; right:0; bottom:0; z-index:6; max-height:88vh; overflow:auto;
+           background:var(--panel); border-radius:24px 24px 0 0; border-top:1px solid var(--line);
+           padding:10px 18px calc(20px + env(safe-area-inset-bottom)); animation:up .3s var(--ease);
+           max-width:560px; margin:0 auto; }
+  .grab { width:40px; height:5px; border-radius:5px; background:var(--line); margin:0 auto 14px; }
+  .sheet h3 { margin:6px 0 4px; font-size:18px; }
+  .sheet p { color:var(--muted); font-size:14.5px; margin:0 0 10px; }
+  .sheet ol { padding-left:20px; margin:10px 0 14px; display:flex; flex-direction:column; gap:10px; font-size:15px; }
+  .urlrow { display:flex; gap:8px; align-items:center; margin:6px 0 4px; }
+  .urlrow code { flex:1; min-width:0; overflow-x:auto; white-space:nowrap; font:12px ui-monospace,Menlo,monospace;
+                 background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:9px; }
+  .urlrow button { padding:8px 12px; border-radius:10px; background:var(--panel-2); font-size:14px; font-weight:600; }
+  .row-btn { display:block; width:100%; text-align:left; padding:14px 2px; border-top:1px solid var(--line); font-size:15px; }
+  .row-btn.warn { color:var(--warn); }
+  .fp { font:12px ui-monospace, Menlo, monospace; color:var(--muted); }
+
+  .drag .stage { outline:2px dashed var(--accent); outline-offset:-4px; border-radius:var(--radius); }
+
   #toast {
-    position:fixed; left:50%; bottom:22px; transform:translate(-50%, 70px);
-    background:var(--ink); color:var(--bg); padding:10px 17px; border-radius:999px;
-    font-size:14px; font-weight:560; opacity:0; transition:.2s; pointer-events:none; max-width:88vw;
+    position:fixed; left:50%; bottom:calc(96px + env(safe-area-inset-bottom)); transform:translate(-50%,20px);
+    background:var(--ink); color:var(--bg); padding:10px 17px; border-radius:999px; z-index:9;
+    font-size:14px; font-weight:600; opacity:0; transition:.25s var(--ease); pointer-events:none; max-width:88vw;
   }
   #toast.show { transform:translate(-50%,0); opacity:1; }
-  footer { color:var(--muted); font-size:13px; margin-top:26px; }
-  .latest { background:var(--panel); border:1px solid var(--accent); border-radius:var(--radius);
-            padding:16px; margin-bottom:12px; display:flex; flex-direction:column; gap:10px; }
-  .latest-head { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--muted); }
-  .latest-dot { width:8px; height:8px; border-radius:50%; background:var(--accent); flex:none; }
-  .latest-text { font-size:16px; line-height:1.45; word-break:break-word; white-space:pre-wrap;
-                 max-height:9.5em; overflow:auto; -webkit-user-select:text; user-select:text; }
-  button.big { width:100%; padding:14px 18px; font-size:16px; }
-  button.done { background:var(--panel); color:var(--accent); border-color:var(--accent); }
-  #send-clipboard { margin-bottom:12px; }
-  .latest-img, .thumb { display:block; max-width:100%; max-height:340px; width:auto; border-radius:10px;
-                        border:1px solid var(--line); background:var(--bg);
-                        -webkit-touch-callout:default; -webkit-user-select:auto; user-select:auto; }
-  .thumb { max-height:220px; margin-top:6px; }
-  button.link { background:none; border:0; padding:0; color:var(--muted);
-                font-size:13px; text-decoration:underline; cursor:pointer; }
-  button.link:hover { color:var(--ink); }
-  .bridge { margin-bottom:12px; border-color:var(--accent); }
-  .bridge h2 { font-size:18px; margin:0 0 6px; }
-  .bridge ol { padding-left:20px; margin:12px 0; display:flex; flex-direction:column; gap:12px; font-size:15px; }
-  .urlrow { display:flex; gap:8px; align-items:center; margin-top:8px; }
-  .urlrow code { flex:1; min-width:0; overflow-x:auto; white-space:nowrap; font:12px ui-monospace,Menlo,monospace;
-                 background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px; }
-  .urlrow button { padding:7px 12px; font-size:14px; }
+
+  @keyframes ripple { 0% { transform:scale(.35); opacity:.7; } 100% { transform:scale(1); opacity:0; } }
+  @keyframes pulse { 0% { box-shadow:0 0 0 0 var(--accent); } 70%,100% { box-shadow:0 0 0 16px transparent; } }
+  @keyframes blink { 50% { opacity:.35; } }
+  @keyframes drop { from { transform:translateY(-14px) scale(.98); opacity:0; } }
+  @keyframes up { from { transform:translateY(100%); } }
+  @keyframes fade { from { opacity:0; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>toss<span>.</span></h1>
-  <p class="tag">Copy on your laptop, it is here. Encrypted, over your wifi.</p>
 
-  <section id="gate">
-    <form id="join" class="panel" autocomplete="off">
-      <div class="field">
-        <label for="code">Code from your laptop</label>
-        <input id="code" name="code" placeholder="amber-fox-tiger-reef" autocapitalize="off" autocorrect="off" spellcheck="false" required>
-      </div>
-      <button class="primary" type="submit">Connect</button>
-      <div class="err" id="join-error"></div>
-    </form>
-    <footer>
-      Scanning the QR fills this in and connects by itself. You only ever do it once.
-    </footer>
-  </section>
+<section id="gate" class="screen" hidden>
+  <div class="mark"><i></i></div>
+  <h1>Scan the QR on your laptop</h1>
+  <p>Point your camera at it. That's the whole setup, and you only do it once.</p>
+  <form id="join" autocomplete="off">
+    <input id="code" name="code" placeholder="or type the four words" autocapitalize="off" autocorrect="off" spellcheck="false" required>
+    <button class="big primary" type="submit">Connect</button>
+    <div class="err" id="join-error"></div>
+  </form>
+</section>
 
-  <section id="room" hidden>
-    <div class="status">
-      <span class="dot" id="dot"></span>
-      <span id="peers"></span>
-      <button id="forget" class="link" type="button">forget</button>
-    </div>
+<section id="room" class="screen" hidden>
+  <div class="top">
+    <span class="pill"><span class="dot wait" id="dot"></span><span id="peers">connecting</span></span>
+    <span class="grow"></span>
+    <button id="menu" class="icon-btn" type="button" aria-label="Settings">&middot;&middot;&middot;</button>
+  </div>
 
-    <div id="bridge" class="panel bridge" hidden>
-      <h2>Make it automatic</h2>
-      <p class="dim">Set this up once and you never open this page again. Double-tap the back of your phone to get the laptop's clipboard. Triple-tap to send yours.</p>
-      <ol>
-        <li>Open <b>Shortcuts</b>, tap <b>+</b>, add <b>Get Contents of URL</b> with this link, then add <b>Copy to Clipboard</b>. Name it <i>Get from laptop</i>.
-          <div class="urlrow"><code data-url></code><button type="button" data-copyurl>Copy</button></div></li>
-        <li>New shortcut: add <b>Get Clipboard</b>, then <b>Get Contents of URL</b> with the same link. Tap the arrow: Method <b>POST</b>, Request Body <b>File</b>, File <b>Clipboard</b>. Name it <i>Send to laptop</i>.</li>
-        <li><b>Settings</b> &rsaquo; Accessibility &rsaquo; Touch &rsaquo; <b>Back Tap</b>. Double Tap: <i>Get from laptop</i>. Triple Tap: <i>Send to laptop</i>.</li>
-      </ol>
-      <button id="bridge-done" class="link" type="button">Done, hide this</button>
+  <div class="stage">
+    <div id="idle" class="idle">
+      <div class="rings"><span></span><span></span><span></span><b>&#8595;</b></div>
+      <h2>Ready</h2>
+      <p id="idle-hint">Copy anything on your laptop and it lands here. Paste or drop here to send it back.</p>
+      <div id="xfer" class="progress" hidden><i></i></div>
     </div>
 
     <div id="latest" class="latest" hidden>
-      <div class="latest-head">
-        <span class="latest-dot"></span>
-        <span id="latest-from">copied on your laptop</span>
-      </div>
+      <div class="latest-head"><span class="dot"></span><span id="latest-from">from your laptop</span></div>
       <div id="latest-text" class="latest-text"></div>
-      <img id="latest-img" class="latest-img" alt="Image copied on your laptop" hidden>
-      <button id="latest-copy" class="primary big" type="button">Tap to copy</button>
-      <button id="latest-save" class="big" type="button" hidden>Save image</button>
+      <img id="latest-img" class="latest-img" alt="Image from your laptop" hidden>
+      <button id="latest-copy" class="big primary" type="button">Tap to copy</button>
+      <button id="latest-save" class="big" type="button" hidden>Save</button>
     </div>
+  </div>
 
-    <button id="send-clipboard" class="big" type="button">Send to my laptop</button>
-
-    <form id="send" class="panel">
-      <div class="field">
-        <label for="compose">Send something back</label>
-        <textarea id="compose" placeholder="paste a link, or type a note"></textarea>
-      </div>
-      <div class="row end" style="margin-top:12px">
-        <button type="button" id="attach">Add a file</button>
-        <button class="primary" type="submit">Send</button>
-      </div>
-      <input type="file" id="file" multiple hidden>
-    </form>
-
-    <p id="empty-list">Copy anything on your laptop and it shows up here. Or hold the hotkey.</p>
+  <details class="recent" id="recent" hidden>
+    <summary id="recent-label">Recent</summary>
     <ul id="items"></ul>
+  </details>
 
-    <footer>
-      Stays paired for good. Add this page to your home screen and it reconnects by itself.
-      Paste anywhere on this page to send, and press enter in the box.
-    </footer>
-  </section>
+  <div class="dock">
+    <button id="send-clipboard" class="big primary" type="button">Send my clipboard</button>
+    <button id="write" class="square" type="button" aria-label="Type a note">Aa</button>
+    <button id="attach" class="square" type="button" aria-label="Send a photo or file">+</button>
+  </div>
+  <form id="send" class="compose" hidden>
+    <textarea id="compose" rows="1" placeholder="Type or paste, then send"></textarea>
+    <button type="submit">Send</button>
+  </form>
+  <input type="file" id="file" multiple hidden>
+</section>
+
+<div id="sheet-bg" class="sheet-bg" hidden></div>
+<div id="sheet" class="sheet" hidden role="dialog" aria-label="Settings">
+  <div class="grab"></div>
+  <div id="bridge">
+    <h3>Skip this page entirely (iPhone)</h3>
+    <p>One Shortcut turns toss into a share option, like AirDrop. Share anything, tap <b>toss</b>, it's on your laptop. Double-tap the back of your phone and the laptop's clipboard is yours.</p>
+    <ol>
+      <li>In <b>Shortcuts</b> tap <b>+</b>, name it <b>toss</b>. Tap <b>&#9432;</b> and turn on <b>Show in Share Sheet</b>.</li>
+      <li>Add <b>If</b>: <i>Shortcut Input</i> <b>has any value</b>.<br>
+        Inside it: <b>Get Contents of URL</b>, method <b>POST</b>, body <b>File</b> = <i>Shortcut Input</i>.<br>
+        Under <b>Otherwise</b>: <b>Get Contents of URL</b>, then <b>Copy to Clipboard</b>.<br>
+        Both use this link:
+        <div class="urlrow"><code data-url>open toss on your wifi to get your link</code><button type="button" data-copyurl>Copy</button></div></li>
+      <li><b>Settings</b> &rsaquo; Accessibility &rsaquo; Touch &rsaquo; <b>Back Tap</b> &rsaquo; Double Tap &rsaquo; <b>toss</b>.</li>
+    </ol>
+  </div>
+  <p class="fp">session <span id="fp">------</span>, the same code shows on your laptop.</p>
+  <button id="forget" class="row-btn warn" type="button">Forget this laptop</button>
+  <button id="sheet-close" class="row-btn" type="button">Close</button>
 </div>
-<div id="toast"></div>
+
+<div id="toast" role="status"></div>
 <script type="module" src="./app.js"></script>
 </body>
 </html>
