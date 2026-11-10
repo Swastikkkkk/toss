@@ -1,5 +1,7 @@
 # toss
 
+**Site:** [toss-flame.vercel.app](https://toss-flame.vercel.app)
+
 Highlight something and hold a key. It lands on your other device.
 
 No app to open, no contact to pick, no chat to send yourself. The thing AirDrop
