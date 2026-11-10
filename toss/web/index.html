@@ -54,6 +54,7 @@
     padding:14px; border-radius:16px; border:1px solid var(--line); background:var(--panel); color:var(--ink);
   }
   .err { color:var(--warn); font-size:14px; min-height:20px; }
+  .in-app #join button[type=submit] { background:var(--panel-2); color:var(--ink); border-color:var(--line); }
 
   /* ---------- the one screen ---------- */
   .top { display:flex; align-items:center; gap:8px; min-height:36px; }
@@ -166,6 +167,7 @@
   <h1>Scan the QR on your laptop</h1>
   <p>Point your camera at it. That's the whole setup, and you only do it once.</p>
   <form id="join" autocomplete="off">
+    <button id="scan" class="big primary" type="button" hidden>Scan QR code</button>
     <input id="code" name="code" placeholder="or type the four words" autocapitalize="off" autocorrect="off" spellcheck="false" required>
     <button class="big primary" type="submit">Connect</button>
     <div class="err" id="join-error"></div>

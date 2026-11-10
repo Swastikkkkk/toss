@@ -11,3 +11,7 @@ screenshot-*.png
 .env.local
 .DS_Store
 config.json
+
+# app
+app/node_modules/
+toss-app-debug.apk

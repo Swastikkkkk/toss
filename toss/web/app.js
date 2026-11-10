@@ -18,6 +18,13 @@ const store = {
 };
 
 import { gcm, pbkdf2Async, hmac, sha256 } from "./vendor-crypto.js";
+import { app } from "./native.js";
+
+/* Where the hub is. A browser page came from the hub, so it is wherever the
+   page is. The app's page is bundled inside the app, so the hub address comes
+   from the pairing link and is remembered. */
+const hubHost = () => (app ? store.get("hub") : location.host);
+const hubPort = () => (app ? (store.get("hub") || "").split(":")[1] || "7777" : location.port || "80");
 
 /* ---------- crypto, matching toss/crypto.py ----------
    Browsers only give WebCrypto to https pages. toss runs on plain http on
@@ -92,6 +99,7 @@ function legacyCopy(text) {
 }
 
 async function copyText(text) {
+  if (app) { try { return await app.copyText(text); } catch {} }
   if (navigator.clipboard && navigator.clipboard.writeText) {
     try { await navigator.clipboard.writeText(text); return true; } catch {}
   }
@@ -119,8 +127,9 @@ function concat(a, b) {
 
 function connect(code, name) {
   return new Promise((resolve, reject) => {
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${proto}//${location.host}/`);
+    const proto = !app && location.protocol === "https:" ? "wss:" : "ws:";
+    if (!hubHost()) return reject(new Error("Scan the QR on your laptop first."));
+    const ws = new WebSocket(`${proto}//${hubHost()}/`);
     let settled = false;
 
     ws.onmessage = async (ev) => {
@@ -333,6 +342,7 @@ function onSyncFile(bytes, name, mime, from) {
 /* Chrome and Android let a focused page write the clipboard on its own.
    Safari only allows it inside a tap, so there this fails and the button waits. */
 async function tryWrite() {
+  if (app && latestClip) { try { await writeClip(); return true; } catch { return false; } }
   if (!latestClip || !document.hasFocus() || !navigator.clipboard) return false;
   try {
     await writeClip();
@@ -343,6 +353,11 @@ async function tryWrite() {
 }
 
 function writeClip() {
+  if (app) {
+    if (latestClip.type === "text") return app.copyText(latestClip.text);
+    if (latestClip.type === "image") return app.copyImage(latestClip.blob);
+    return Promise.reject(new Error("files go through Save"));
+  }
   if (!navigator.clipboard) return Promise.reject(new Error("no clipboard api"));
   if (latestClip.type === "text") return navigator.clipboard.writeText(latestClip.text);
   if (!window.ClipboardItem || !navigator.clipboard.write) return Promise.reject(new Error("no image clipboard"));
@@ -377,6 +392,7 @@ async function saveLatest() {
   if (!latestClip || (latestClip.type !== "image" && latestClip.type !== "file")) return;
   const name = latestClip.name || `toss-${Date.now()}.png`;
   const file = new File([latestClip.blob], name, { type: latestClip.mime });
+  if (app) { try { await app.shareFile(file); } catch { toast("Could not save that"); } return; }
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file] }); return; } catch (e) { if (e && e.name === "AbortError") return; }
   }
@@ -389,6 +405,20 @@ async function saveLatest() {
 /* The other direction. Reading the clipboard always needs a tap, and iPhone
    shows its own Paste confirmation on top of that, which is Apple's rule. */
 async function sendMyClipboard() {
+  if (app) {
+    try {
+      const clip = await app.readClipboard();
+      if (!clip) return toast("Your clipboard is empty");
+      if (clip.type === "image") {
+        await sendFile(new File([clip.blob], `phone-clipboard-${Date.now()}.png`, { type: clip.blob.type }), true);
+      } else if (clip.text.trim()) {
+        await sendText(clip.text);
+      } else {
+        return toast("Your clipboard is empty");
+      }
+    } catch { toast("Could not read the clipboard"); }
+    return;
+  }
   if (!navigator.clipboard) {
     $("#send").hidden = false; $("#compose").focus();
     return toast("Long-press the box, Paste, then Send");
@@ -540,6 +570,7 @@ async function reconnect() {
     state.retry = 0;
     renderPeers();
   } catch (err) {
+    console.warn("toss: reconnect failed:", err && err.message);
     if (/code/i.test(err.message)) {
       // the laptop rotated its code, so stop guessing and ask
       state.giveUp = true;
@@ -575,6 +606,7 @@ function forget(message) {
 
 async function save(item) {
   const file = new File([item.bytes], item.name, { type: item.mime || "application/octet-stream" });
+  if (app) { try { await app.shareFile(file); } catch { toast("Could not save that"); } return; }
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file] }); return; } catch (e) { if (e && e.name === "AbortError") return; }
   }
@@ -608,7 +640,7 @@ async function enter(code) {
   if (state.ws && state.ws.readyState === 1) {
     store.set("name", state.name);
     store.set("code", code);   // so you never type it twice
-    if (location.hash) history.replaceState(null, "", location.pathname);
+    if (!app && location.hash) history.replaceState(null, "", location.pathname);
     // Moving to the stable toss-xxxx.local name happens after we are
     // connected, never before, so it can never slow down opening the page.
     setTimeout(() => preferStableName(code), 1500);
@@ -725,15 +757,21 @@ function init() {
 async function moveToStableName(code) {
   const h = store.get("host");
   const id = store.get("id");
-  if (!h || !id || !code || location.protocol !== "http:" || location.hostname === h) return false;
+  const here = (hubHost() || "").split(":")[0];
+  if (!h || !id || !code || here === h || (!app && location.protocol !== "http:")) return false;
   try {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 2500);
-    const r = await fetch(`http://${h}:${location.port || 80}/ping`, { signal: ctl.signal, cache: "no-store" });
+    const r = await fetch(`http://${h}:${hubPort()}/ping`, { signal: ctl.signal, cache: "no-store" });
     clearTimeout(t);
     const j = await r.json();
     if (j.id !== id) return false;
-    location.replace(`http://${h}:${location.port || 80}/#code=${encodeURIComponent(code)}&h=${h}&id=${id}`);
+    if (app) {
+      store.set("hub", `${h}:${hubPort()}`);
+      try { state.ws && state.ws.close(); } catch {}
+      return false;   // the normal reconnect picks up the new address
+    }
+    location.replace(`http://${h}:${hubPort()}/#code=${encodeURIComponent(code)}&h=${h}&id=${id}`);
     return true;
   } catch { return false; }
 }
@@ -758,18 +796,76 @@ function guessName() {
   return "a device";
 }
 
-function boot() {
-  init();
-  const params = new URLSearchParams(location.hash.slice(1));
-  const fromLink = params.get("code");
+/** Take what a pairing link carries: the hub address (in the app), the
+    code, the pre-stretched key, and the stable name. Returns the code. */
+function applyLink(text) {
+  let hash = "", host = null;
+  try {
+    const u = new URL(text);
+    hash = u.hash.slice(1);
+    host = u.host;
+  } catch {
+    // "192.168.1.5:7777 amber-fox-tiger-reef" typed by hand works too
+    const m = /^\s*([\w.-]+(?::\d+)?)\s+(.+)$/.exec(text);
+    if (m && /[.:]/.test(m[1])) { host = m[1].includes(":") ? m[1] : `${m[1]}:7777`; hash = `code=${m[2]}`; }
+  }
+  const params = new URLSearchParams(hash);
+  const code = params.get("code");
+  if (!code) return null;
+  if (app && host) store.set("hub", host);
   const k = params.get("k");
-  if (fromLink && k) {
-    const normalized = fromLink.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").join("-");
+  if (k) {
+    const normalized = code.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").join("-");
     store.set("prekey-" + normalized, k.replace(/-/g, "+").replace(/_/g, "/"));
   }
   if (params.get("h")) store.set("host", params.get("h"));
   if (params.get("id")) store.set("id", params.get("id"));
-  const code = fromLink || store.get("code");
+  return code;
+}
+
+async function scanToPair() {
+  try {
+    const text = await app.scanQR();
+    if (!text) return;
+    const code = applyLink(text);
+    if (!code) { $("#join-error").textContent = "That QR isn't a toss code."; return; }
+    $("#join-error").textContent = "";
+    enter(code);
+  } catch (err) {
+    $("#join-error").textContent = (err && err.message) || "Could not open the camera.";
+  }
+}
+
+function boot() {
+  if (app) {
+    document.documentElement.classList.add("in-app", `on-${app.platform}`);
+    $("#scan").hidden = false;
+    $("#scan").addEventListener("click", scanToPair);
+    $("#code").placeholder = "or paste the link from your laptop";
+    // In the app the form takes a whole link, not only the four words,
+    // because the app has no address bar to learn the laptop's address from.
+    $("#join").addEventListener("submit", (e) => {
+      const v = $("#code").value.trim();
+      if (!/[:/]/.test(v)) return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      const code = applyLink(v);
+      if (code) enter(code);
+      else $("#join-error").textContent = "Paste the whole link your laptop shows.";
+    }, true);
+    // Share a photo, a link or a file to toss from any app: it just goes.
+    app.onShared(async ({ texts, files }) => {
+      // the app may have been cold-started by the share, so wait to be connected
+      for (let i = 0; i < 100 && !(state.ws && state.ws.readyState === 1 && state.key); i++) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      if (!(state.ws && state.ws.readyState === 1)) return toast("Not connected to your laptop yet");
+      for (const t of texts) await sendText(t);
+      for (const f of files) await sendFile(f);
+    });
+  }
+  init();
+  const code = (!app && applyLink(location.href)) || store.get("code");
   if (code) {
     $("#code").value = code;
     enter(code);
